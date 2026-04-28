@@ -29,57 +29,7 @@ void __delete(PyObject* X){
 #define Py_DECREF(X) __delete(X);
 #endif
 
-static const Py_ssize_t expected_vec_dims = 2;
-
-static PyObject* pylist_process_list(PyObject* self, PyObject* args){
-    PyObject* list = NULL;
-    PyArg_ParseTuple(args, "O", &list);
-    printf("%x: Retrieving list from tuple\n",list);
-    Py_ssize_t shape_1 = PyList_Size(list);
-    printf("list is size %d\n",shape_1);
-    T* buffer;
-    buffer = (T*)malloc(expected_vec_dims*sizeof(T)*shape_1);
-    for(Py_ssize_t i=0; i<shape_1; i++){
-        PyObject* item = PyList_GetItem(list,i);
-        printf("%x: Retrieving vec2d from list\n",item);
-        Py_ssize_t shape_2 = PyTuple_Size(item);
-        if (shape_2 != expected_vec_dims)
-            abort();
-        for (Py_ssize_t j=0; j<shape_2; j++){
-            PyObject* e = PyTuple_GetItem(item,j);
-            printf("%x: Retrieving element %d from vec2d\n",e,j);
-            buffer[shape_2*i+j]=PyFloat_AsDouble(e);
-            printf("%f,\n",buffer[shape_2*i+j]);//T
-        }
-        Py_DECREF(item);//1
-    }
-    Py_DECREF(list);
-    Py_ssize_t* shape = (Py_ssize_t*)malloc(2*sizeof(Py_ssize_t));
-    shape[0]=shape_1;
-    shape[1]=expected_vec_dims;
-    Py_ssize_t* strides = (Py_ssize_t*)malloc(2*sizeof(Py_ssize_t));
-    strides[0]=expected_vec_dims*sizeof(T);
-    strides[1]=sizeof(T);
-    process((void*)buffer,strides,shape);
-    free(shape);
-    free(strides);
-    free(buffer);
-    Py_INCREF(Py_None);
-    return Py_None;
-    //return Py_RETURN_NONE;
-}
-
-PyObject* _vec2d(T x, T y){
-    PyObject* result = PyTuple_New(expected_vec_dims);
-    printf("%x: New Vec2d created\n",result);
-    PyObject* x_ = PyFloat_FromDouble(x);//T
-    PyObject* y_ = PyFloat_FromDouble(y);//T
-    PyTuple_SetItem(result, 0, x_);
-    PyTuple_SetItem(result, 1, y_);
-    return result;
-}
-
-static PyObject* pylist_process_memoryview(PyObject* self, PyObject* args){
+static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
     PyObject* mvobject = NULL;
     PyArg_ParseTuple(args, "O", &mvobject);
     printf("%x: Retrieving memoryview from tuple\n",mvobject);
@@ -92,25 +42,6 @@ static PyObject* pylist_process_memoryview(PyObject* self, PyObject* args){
 }
 
 #if !MODULE_LIBRARY
-static PyObject* pylist_test_list(PyObject* self, PyObject* what){
-    PyObject* list = PyList_New(0);
-    printf("%x: New List of Vec2d created\n",list);
-    for (size_t i=0;i<sizeof(test_data)/sizeof(T);i+=2){
-        PyObject* item = _vec2d(test_data[i],test_data[i+1]);
-        printf("%x: Passing Vec2d to list\n",item);
-        PyList_Append(list, item);
-    }
-    PyObject* printList = PyObject_GetAttrString(self,"process_list");
-    PyObject* args = PyTuple_New(1);
-    printf("%x: New tuple with list created\n",args);
-    printf("%x: Passing list to tuple\n",list);
-    PyTuple_SetItem(args, 0, list);
-    PyObject* result = PyObject_CallObject(printList, args);
-    Py_DECREF(args);
-    Py_DECREF(printList);
-    return PyLong_FromLong(0);
-}
-
 typedef struct {
     PyObject_VAR_HEAD
     Py_ssize_t* shape;
@@ -193,7 +124,7 @@ static PyType_Spec MyObject_Spec = {
     .slots = MyObject_Slots
 };
 
-static PyObject* pylist_test_memoryview(PyObject* self, PyObject* what){
+static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
     PyTypeObject *MyType = (PyTypeObject*)PyType_FromSpec(&MyObject_Spec);
     PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);  // .tp_new
 //    MyObject* myobj = PyObject_New(MyObject,MyType);
@@ -214,56 +145,49 @@ static PyObject* pylist_test_memoryview(PyObject* self, PyObject* what){
 }
 #endif
 
-static PyMethodDef pylist_methods[] = {
-    {"process_list", pylist_process_list, METH_VARARGS, ""},
-    {"process_memoryview", pylist_process_memoryview, METH_VARARGS, ""},
+static PyMethodDef gpu_reshaper_methods[] = {
+    {"process_memoryview", gpu_reshaper_process_memoryview, METH_VARARGS, ""},
 #if !MODULE_LIBRARY
-    {"test_list", pylist_test_list, METH_NOARGS, ""},
-    {"test_memoryview", pylist_test_memoryview, METH_NOARGS, ""},
+    {"test_memoryview", gpu_reshaper_test_memoryview, METH_NOARGS, ""},
 #endif
     {NULL, NULL, 0, NULL}
 };
 
-static struct PyModuleDef pylist_module = {
+static struct PyModuleDef gpu_reshaper_module = {
     PyModuleDef_HEAD_INIT,
-    "pylist",
+    "gpu_reshaper",
     "",
     0,
-    pylist_methods,
+    gpu_reshaper_methods,
     NULL,
     NULL,
     NULL,
     NULL
 };
 
-PyMODINIT_FUNC PyInit_pylist(void){
-    return PyModule_Create(&pylist_module);
+PyMODINIT_FUNC PyInit_gpu_reshaper(void){
+    return PyModule_Create(&gpu_reshaper_module);
 }
 
 #if !MODULE_LIBRARY
 int main(){
-    PyImport_AppendInittab("pylist", PyInit_pylist);
+    PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
     Py_InitializeEx(0);
 
     PyObject* unittest = PyImport_ImportModule("unittest");
     PyObject* tcase = PyObject_GetAttrString(unittest,"FunctionTestCase");
-    PyObject* pylist = PyImport_ImportModule("pylist");
-    PyObject* tl = PyObject_GetAttrString(pylist,"test_list");
-    PyObject* tm = PyObject_GetAttrString(pylist,"test_memoryview");
+    PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
+    PyObject* tm = PyObject_GetAttrString(gpu_reshaper,"test_memoryview");
     PyObject* tsuite = PyObject_GetAttrString(unittest,"TestSuite");
     PyObject* tresult = PyObject_GetAttrString(unittest,"TestResult");
     if (!tresult)
         printf("TestResult class was not found in unittest\n");
-    PyObject* case1_args = PyTuple_New(1);
-    PyTuple_SetItem(case1_args, 0, tl);
-    PyObject* case1 = PyObject_CallObject(tcase,case1_args);
     PyObject* case2_args = PyTuple_New(1);
     PyTuple_SetItem(case2_args, 0, tm);
     PyObject* case2 = PyObject_CallObject(tcase,case2_args);
     PyObject* tsuite_args = PyTuple_New(1);
-    PyObject* tests_tuple = PyTuple_New(2);
-    PyTuple_SetItem(tests_tuple,0,case1);
-    PyTuple_SetItem(tests_tuple,1,case2);
+    PyObject* tests_tuple = PyTuple_New(1);
+    PyTuple_SetItem(tests_tuple,0,case2);
     PyTuple_SetItem(tsuite_args,0,tests_tuple);
     PyObject* runner = PyObject_CallObject(tsuite, tsuite_args);
     PyObject* run_method = PyObject_GetAttrString(runner,"run");
