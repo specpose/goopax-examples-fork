@@ -41,7 +41,6 @@ static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args)
     return Py_None;
 }
 
-#if !MODULE_LIBRARY
 typedef struct {
     PyObject_VAR_HEAD
     Py_ssize_t* shape;
@@ -126,9 +125,7 @@ static PyType_Spec MyObject_Spec = {
 
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
     PyTypeObject *MyType = (PyTypeObject*)PyType_FromSpec(&MyObject_Spec);
-    PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);  // .tp_new
-//    MyObject* myobj = PyObject_New(MyObject,MyType);
-//    PyObject* myobj_ = PyObject_Init((PyObject*)myobj, MyType);
+    PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);
     Py_buffer view;
     if (PyObject_GetBuffer((PyObject*)myobj,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         PyObject* mvobject = PyMemoryView_FromBuffer(&view);
@@ -139,17 +136,16 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
         PyTuple_SetItem(args, 0, mvobject);
         PyObject* result = PyObject_CallObject(printMemoryview, args);
         PyBuffer_Release(&view);
+    } else {
+        abort();
     }
     PyObject_Del((void*)myobj);
     return PyLong_FromLong(0);
 }
-#endif
 
 static PyMethodDef gpu_reshaper_methods[] = {
     {"process_memoryview", gpu_reshaper_process_memoryview, METH_VARARGS, ""},
-#if !MODULE_LIBRARY
     {"test_memoryview", gpu_reshaper_test_memoryview, METH_NOARGS, ""},
-#endif
     {NULL, NULL, 0, NULL}
 };
 
