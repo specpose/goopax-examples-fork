@@ -46,12 +46,36 @@ std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
 }
 }
 
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
+array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
-    std::fill(std::begin(shape), std::end(shape), 0);
+    fill(std::begin(shape), std::end(shape), 0);
     shape[0] = d.default_global_size_min() % d.default_local_size() == 0 ? d.default_global_size_min() / d.default_local_size() : 0;
     shape[1] = d.default_global_size_min() % d.default_local_size() == 0 ? d.default_local_size() : 0;
     return shape;
+};
+
+const map<const char*, vector<string>> populate() {
+    map<const char*, vector<string>> known_types{};
+    known_types["double"].push_back(string("d"));
+    return known_types;
+};
+
+const map<const char*, vector<string>> register_types(goopax_device& d) {
+    const char* delim = " ";
+    auto type_to_python = populate();
+    map<const char*, vector<string>> registered_type{};
+    for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
+    {
+        if (d.support_type(static_cast<type_enum_t>(t * num_type_modes)))
+        {
+            if (type_to_python.find(type_enum_raw_names[t]) != end(type_to_python))
+                registered_type[type_enum_raw_names[t]] = type_to_python[type_enum_raw_names[t]];
+            cout << delim << type_enum_raw_names[t];
+            delim = ", ";
+        }
+    }
+    cout << endl;
+    return registered_type;
 };
 
 int main()
@@ -85,19 +109,13 @@ int main()
                      << d.default_global_size_max() << endl
                      << "    registers: " << d.max_registers() << endl;
                 cout << "    supported types:";
-                const char* delim = " ";
 
-                for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
-                {
-                    if (d.support_type(static_cast<type_enum_t>(t * num_type_modes)))
-                    {
-                        cout << delim << type_enum_raw_names[t];
-                        delim = ", ";
-                    }
-                }
-                cout << endl;
+                auto registered_type = register_types(d);
 
                 cout << check_shape(d) << endl;
+
+                for (const auto& t : registered_type)
+                    cout << t.first << endl;
             }
         }
     }
