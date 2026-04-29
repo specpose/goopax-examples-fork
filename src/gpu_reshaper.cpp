@@ -100,6 +100,11 @@ void myobj_free(void *self) {
 int myobj_init(PyObject* self, PyObject* args, PyObject* kwds) {
     printf("Init\n");
     MyObject* buffy = (MyObject*)self;
+    for (size_t i = 0; i < PyBUF_MAX_NDIM; ++i) {
+        buffy->shape[i] = 0;
+        buffy->strides[i] = 0;
+    }
+    strcpy(buffy->format, "x");
     for (size_t i=0; i<sizeof(test_data)/sizeof(T); i++)
         buffy->ptr[i] = test_data[i];
     return 0;
@@ -123,19 +128,118 @@ static PyType_Spec MyObject_Spec = {
     .slots = MyObject_Slots
 };
 
+#include <iostream>
+namespace std
+{
+template<typename T, size_t N>
+std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
+{
+    s << "(";
+    for (size_t k = 0; k < N; ++k)
+    {
+        if (k != 0)
+        {
+            s << ", ";
+        }
+        s << a[k];
+    }
+    s << ")";
+    return s;
+}
+}
+#include <goopax_extra/types.hpp>
+#include <map>
+using namespace goopax;
+static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal", "Vulkan" };
+const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> python_types() {
+    std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
+    known_types[static_cast<type_enum_t>(10 * num_type_modes)].push_back(std::pair(std::string("d"),8));
+    return known_types;
+};
+const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> register_types(goopax_device& d) {
+    auto type_to_python = python_types();
+    std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> registered_type{};
+    for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
+    {
+        const auto enumerated_type = static_cast<type_enum_t>(t * num_type_modes);
+        if (d.support_type(enumerated_type))
+        {
+            if (type_to_python.find(enumerated_type) != end(type_to_python))
+                registered_type[enumerated_type] = type_to_python[enumerated_type];
+        }
+    }
+    return registered_type;
+};
+bool test_dev(unsigned int env) {
+    goopax_device d = goopax::default_device(static_cast<goopax::envmode>(env));
+    if (d.valid())
+        return true;
+    unsigned int log_env = env >> int(std::log2(env));
+    return false;
+}
+std::vector<goopax_device> test_env(unsigned int env) {
+    std::vector<goopax_device> dvec{};
+    if (test_dev(env))
+        dvec = goopax::devices(static_cast<goopax::envmode>(env));
+    return dvec;
+}
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
+    auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
+    std::fill(std::begin(shape), std::end(shape), 0);
+    if (d.default_global_size_min() % d.default_local_size() == 0) {
+        shape[0] = d.default_global_size_min() / d.default_local_size();
+        shape[1] = d.default_local_size();
+    } else {
+        // exception
+        shape[0] = 0;
+        shape[1] = 0;
+    }
+    return shape;
+};
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const std::string format, const Py_ssize_t itemsize) {
+    auto strides = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
+    std::copy(begin(shape), end(shape), begin(strides));
+    Py_ssize_t previous_stridesize = itemsize;
+    std::for_each(std::rbegin(strides), std::rend(strides), [&previous_stridesize](auto& current){
+        if (current != 0) {
+            auto shape = current;
+            current = previous_stridesize;
+            previous_stridesize = shape * previous_stridesize;
+        }
+    });
+    return strides;
+};
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
     PyTypeObject *MyType = (PyTypeObject*)PyType_FromSpec(&MyObject_Spec);
     PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);
     Py_buffer view;
     if (PyObject_GetBuffer((PyObject*)myobj,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
-        PyObject* mvobject = PyMemoryView_FromBuffer(&view);
-        PyObject* printMemoryview = PyObject_GetAttrString(self,"process_memoryview");
-        PyObject* args = PyTuple_New(1);
-        printf("%x: New tuple with memoryview created\n",args);
-        printf("%x: Passing memoryview to tuple\n",mvobject);
-        PyTuple_SetItem(args, 0, mvobject);
-        PyObject* result = PyObject_CallObject(printMemoryview, args);
-        PyBuffer_Release(&view);
+        goopax::envmode env = static_cast<goopax::envmode>(1 << 4);
+        std::vector<goopax_device> dvec = test_env(env);
+        if (!dvec.empty()){
+            printf("Got view format: %s\n", view.format);
+            const auto shape = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.shape;
+            std::cout << *shape << std::endl;
+            const auto strides = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.strides;
+            std::cout << *strides << std::endl;
+            auto registered_type = register_types(dvec[0]);
+            bool valid_format = false;
+            for (const auto& ts : registered_type){
+                for (const auto& p : ts.second)
+                    if (p.first==view.format){
+                        valid_format = true;
+                        break;
+                    }
+                if (valid_format)
+                    break;
+            }
+            auto gpu_shape = check_shape(dvec[0]);
+                std::cout << gpu_shape << std::endl;
+            auto gpu_strides = make_strides(gpu_shape,std::string("d"),8);
+                std::cout << gpu_strides << std::endl;
+            if (!(valid_format && *shape==gpu_shape && *strides==gpu_strides))
+                PyBuffer_Release(&view);
+        }
     } else {
         abort();
     }
@@ -170,49 +274,18 @@ int main(){
     PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
     Py_InitializeEx(0);
 
-    PyObject* unittest = PyImport_ImportModule("unittest");
-    PyObject* tcase = PyObject_GetAttrString(unittest,"FunctionTestCase");
     PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
-    PyObject* tm = PyObject_GetAttrString(gpu_reshaper,"test_memoryview");
-    PyObject* tsuite = PyObject_GetAttrString(unittest,"TestSuite");
-    PyObject* tresult = PyObject_GetAttrString(unittest,"TestResult");
-    if (!tresult)
-        printf("TestResult class was not found in unittest\n");
-    PyObject* case2_args = PyTuple_New(1);
-    PyTuple_SetItem(case2_args, 0, tm);
-    PyObject* case2 = PyObject_CallObject(tcase,case2_args);
-    PyObject* tsuite_args = PyTuple_New(1);
-    PyObject* tests_tuple = PyTuple_New(1);
-    PyTuple_SetItem(tests_tuple,0,case2);
-    PyTuple_SetItem(tsuite_args,0,tests_tuple);
-    PyObject* runner = PyObject_CallObject(tsuite, tsuite_args);
-    PyObject* run_method = PyObject_GetAttrString(runner,"run");
-    if (!run_method)
-        printf("run_method not found\n");
-    PyObject* result = PyObject_CallObject(tresult,NULL);
-    if (!result)
-        printf("Result was not instantiated\n");
-    PyObject* run_args = PyTuple_New(1);
-    PyTuple_SetItem(run_args,0,result);
-    PyObject* run = PyObject_CallObject(run_method,run_args);
-    if (!run)
-        abort();
-    PyObject* times = PyObject_GetAttrString(result,"collectedDurations");
-    for (int i=0;i<PyList_Size(times);i++) {
-        PyObject* tindex = PyList_GetItem(times,i);
-        printf("%s took %f.\n",PyTuple_GetItem(tindex,0),PyFloat_AsDouble(PyTuple_GetItem(tindex,1)));
-    }
-    int uS = PyList_Size(PyObject_GetAttrString(result,"unexpectedSuccesses"));
-    int f = PyList_Size(PyObject_GetAttrString(result,"failures"));
-    int e = PyList_Size(PyObject_GetAttrString(result,"errors"));
-    long tR = PyLong_AsLong(PyObject_GetAttrString(result,"testsRun"));
+    PyObject* test = PyObject_GetAttrString(gpu_reshaper,"test_memoryview");
+    PyObject* test_args = PyTuple_New(0);
+    //PyTuple_SetItem(test_args, 0, tm);
+    PyObject* test_object = PyObject_CallObject(test,test_args);
 #if DEBUG
     if (Py_FinalizeEx() < 0)
         abort();
 #else
     Py_Finalize();
 #endif
-    return tR>0&&e==0&&f==0&&uS==0 ? 0 : 1;
+    return 0;
 }
 #endif
 

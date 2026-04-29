@@ -48,7 +48,7 @@ std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
 
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
-    fill(std::begin(shape), std::end(shape), 0);
+    std::fill(std::begin(shape), std::end(shape), 0);
     if (d.default_global_size_min() % d.default_local_size() == 0) {
         shape[0] = d.default_global_size_min() / d.default_local_size();
         shape[1] = d.default_local_size();
@@ -62,7 +62,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
 
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const std::string format, const Py_ssize_t itemsize) {
     auto strides = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
-    copy(begin(shape), end(shape), begin(strides));
+    std::copy(begin(shape), end(shape), begin(strides));
     Py_ssize_t previous_stridesize = itemsize;
     std::for_each(std::rbegin(strides), std::rend(strides), [&previous_stridesize](auto& current){
         if (current != 0) {
@@ -108,7 +108,7 @@ bool test_dev(unsigned int env) {
     return false;
 }
 
-vector<goopax_device> test_env(unsigned int env) {
+std::vector<goopax_device> test_env(unsigned int env) {
     std::vector<goopax_device> dvec{};
     if (test_dev(env))
         dvec = goopax::devices(static_cast<goopax::envmode>(env));
@@ -150,13 +150,13 @@ int main()
                 auto registered_type = register_types(d);
 
                 for (const auto& t : registered_type)
-                    if (t.second[0].first==string("d"))
+                    if (t.second[0].first==std::string("d"))
                         cout << "\"" << t.second[0].first.c_str() << "\"" << endl;
 
                 auto shape = check_shape(d);
                 cout << shape << endl;
 
-                auto strides = make_strides(shape,string("d"),8);
+                auto strides = make_strides(shape,std::string("d"),8);
                 cout << strides << endl;
             }
         }
