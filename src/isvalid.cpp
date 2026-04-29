@@ -46,24 +46,44 @@ std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
 }
 }
 
-array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     fill(std::begin(shape), std::end(shape), 0);
-    shape[0] = d.default_global_size_min() % d.default_local_size() == 0 ? d.default_global_size_min() / d.default_local_size() : 0;
-    shape[1] = d.default_global_size_min() % d.default_local_size() == 0 ? d.default_local_size() : 0;
+    if (d.default_global_size_min() % d.default_local_size() == 0) {
+        shape[0] = d.default_global_size_min() / d.default_local_size();
+        shape[1] = d.default_local_size();
+    } else {
+        // exception
+        shape[0] = 0;
+        shape[1] = 0;
+    }
     return shape;
 };
 
-const map<const char*, vector<string>> populate() {
-    map<const char*, vector<string>> known_types{};
-    known_types["double"].push_back(string("d"));
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const std::string format, const Py_ssize_t itemsize) {
+    auto strides = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
+    copy(begin(shape), end(shape), begin(strides));
+    Py_ssize_t previous_stridesize = itemsize;
+    std::for_each(std::rbegin(strides), std::rend(strides), [&previous_stridesize](auto& current){
+        if (current != 0) {
+            auto shape = current;
+            current = previous_stridesize;
+            previous_stridesize = shape * previous_stridesize;
+        }
+    });
+    return strides;
+};
+
+const std::map<const char*, std::vector<std::pair<std::string, Py_ssize_t>>> populate() {
+    std::map<const char*, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
+    known_types["double"].push_back(std::pair(std::string("d"),8));
     return known_types;
 };
 
-const map<const char*, vector<string>> register_types(goopax_device& d) {
+const std::map<const char*, std::vector<std::pair<std::string, Py_ssize_t>>> register_types(goopax_device& d) {
     const char* delim = " ";
     auto type_to_python = populate();
-    map<const char*, vector<string>> registered_type{};
+    std::map<const char*, std::vector<std::pair<std::string, Py_ssize_t>>> registered_type{};
     for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
     {
         if (d.support_type(static_cast<type_enum_t>(t * num_type_modes)))
@@ -112,10 +132,15 @@ int main()
 
                 auto registered_type = register_types(d);
 
-                cout << check_shape(d) << endl;
-
                 for (const auto& t : registered_type)
-                    cout << t.first << endl;
+                    if (t.second[0].first==string("d"))
+                        cout << "\"" << t.second[0].first.c_str() << "\"" << endl;
+
+                auto shape = check_shape(d);
+                cout << shape << endl;
+
+                auto strides = make_strides(shape,string("d"),8);
+                cout << strides << endl;
             }
         }
     }
