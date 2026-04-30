@@ -46,19 +46,51 @@ std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
 }
 }
 
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
+static Py_ssize_t queue_variables = 3;
+static Py_ssize_t user_variables = 1;
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d, const Py_ssize_t len) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::fill(std::begin(shape), std::end(shape), 0);
-    if (d.default_global_size_min() % d.default_local_size() == 0) {
-        shape[0] = d.default_global_size_min() / d.default_local_size();
-        shape[1] = d.default_local_size();
+
+    if (d.max_registers() == 0) {
+        shape[3] = 1;
     } else {
-        // exception
-        shape[0] = 0;
-        shape[1] = 0;
+        if (len % (d.max_registers() - queue_variables - user_variables) != 0) {
+            shape[3] = 1;
+        } else {
+            shape[3] = d.max_registers() - queue_variables - user_variables;
+        }
     }
+
+    if (d.default_global_size_min() % d.default_local_size() != 0 || len / d.default_global_size_min() < 1) {
+        shape[0] = 1;
+    } else {
+        shape[0] = d.default_global_size_min() / d.default_local_size();
+    }
+
+    if (len / d.default_local_size() < 1) {
+        shape[1] = 1;
+    } else {
+        shape[1] = d.default_local_size();
+    }
+
+    if (len / shape[0] / shape[1] / shape[3] < 1) {
+        shape[2] = 1;
+    } else {
+        shape[2] = len / (shape[0] * shape[1] * shape[3]);
+    }
+
     return shape;
 };
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> intel_hd_530(goopax_device& d, const Py_ssize_t len) {
+    auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
+    std::fill(std::begin(shape), std::end(shape), 0);
+    shape[3] = 60;
+    shape[0] = 768 / 16;
+    shape[1] = 16;
+    shape[2] = len / (48*16*60);
+    return shape;
+}
 
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const std::string format, const Py_ssize_t itemsize) {
     auto strides = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
@@ -104,7 +136,7 @@ bool test_dev(unsigned int env) {
     if (d.valid())
         return true;
     unsigned int log_env = env >> int(std::log2(env));
-    throw std::runtime_error("Default Device in ENV "+std::to_string(env)+" ("+backend_names[log_env]+")"+" not valid.");
+    //throw std::runtime_error("Default Device in ENV "+std::to_string(env)+" ("+backend_names[log_env]+")"+" not valid.");
     return false;
 }
 
@@ -153,10 +185,9 @@ int main()
                     if (t.second[0].first==std::string("d"))
                         cout << "\"" << t.second[0].first.c_str() << "\"" << endl;
 
-                auto shape = check_shape(d);
-                cout << shape << endl;
-
+                auto shape = check_shape(d, 92160);
                 auto strides = make_strides(shape,std::string("d"),8);
+                cout << shape << endl;
                 cout << strides << endl;
             }
         }

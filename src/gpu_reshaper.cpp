@@ -40,6 +40,30 @@ static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args)
     Py_INCREF(Py_None);
     return Py_None;
 }
+#include <algorithm>
+#include <array>
+#include <string>
+#include <iostream>
+template<typename T>
+PyObject* convert_descriptor_item(T& arr) {
+    auto pos = std::find(std::begin(arr),std::end(arr),0);
+    std::cout << "pos: " << std::distance(std::begin(arr), pos) << std::endl;
+    PyObject* result = PyTuple_New(std::distance(std::begin(arr), pos));
+    for (std::size_t i = 0; i < std::distance(std::begin(arr), pos); ++i) {
+        PyObject* element = PyLong_FromLong(arr[i]);
+        PyTuple_SetItem(result, i, element);
+    }
+    return result;
+}
+static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& strides){
+    PyObject* result = PyTuple_New(3);
+    printf("%x: MemoryView Descriptor created\n",result);
+    PyObject* f = PyUnicode_FromString(format.c_str());
+    PyTuple_SetItem(result, 0, f);
+    PyTuple_SetItem(result, 1, convert_descriptor_item(shape));
+    PyTuple_SetItem(result, 2, convert_descriptor_item(strides));
+    return result;
+}
 
 typedef struct {
     PyObject_VAR_HEAD
@@ -128,7 +152,6 @@ static PyType_Spec MyObject_Spec = {
     .slots = MyObject_Slots
 };
 
-#include <iostream>
 namespace std
 {
 template<typename T, size_t N>
@@ -183,17 +206,40 @@ std::vector<goopax_device> test_env(unsigned int env) {
         dvec = goopax::devices(static_cast<goopax::envmode>(env));
     return dvec;
 }
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d) {
+static Py_ssize_t queue_variables = 3;
+static Py_ssize_t user_variables = 1;
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d, const Py_ssize_t len) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::fill(std::begin(shape), std::end(shape), 0);
-    if (d.default_global_size_min() % d.default_local_size() == 0) {
-        shape[0] = d.default_global_size_min() / d.default_local_size();
-        shape[1] = d.default_local_size();
+
+    if (d.max_registers() == 0) {
+        shape[3] = 1;
     } else {
-        // exception
-        shape[0] = 0;
-        shape[1] = 0;
+        if (len % (d.max_registers() - queue_variables - user_variables) != 0) {
+            shape[3] = 1;
+        } else {
+            shape[3] = d.max_registers() - queue_variables - user_variables;
+        }
     }
+
+    if (d.default_global_size_min() % d.default_local_size() != 0 || len / d.default_global_size_min() < 1) {
+        shape[0] = 1;
+    } else {
+        shape[0] = d.default_global_size_min() / d.default_local_size();
+    }
+
+    if (len / d.default_local_size() < 1) {
+        shape[1] = 1;
+    } else {
+        shape[1] = d.default_local_size();
+    }
+
+    if (len / shape[0] / shape[1] / shape[3] < 1) {
+        shape[2] = 1;
+    } else {
+        shape[2] = len / (shape[0] * shape[1] * shape[3]);
+    }
+
     return shape;
 };
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const std::string format, const Py_ssize_t itemsize) {
@@ -210,6 +256,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
     return strides;
 };
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
+    PyObject* result = NULL;
     PyTypeObject *MyType = (PyTypeObject*)PyType_FromSpec(&MyObject_Spec);
     PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);
     Py_buffer view;
@@ -217,7 +264,7 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
         goopax::envmode env = static_cast<goopax::envmode>(1 << 4);
         std::vector<goopax_device> dvec = test_env(env);
         if (!dvec.empty()){
-            printf("Got view format: %s\n", view.format);
+            printf("Got view format: %s\n, and len: %d", view.format, view.len);
             const auto shape = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.shape;
             std::cout << *shape << std::endl;
             const auto strides = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.strides;
@@ -233,18 +280,19 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
                 if (valid_format)
                     break;
             }
-            auto gpu_shape = check_shape(dvec[0]);
+            auto gpu_shape = check_shape(dvec[0], view.len);
                 std::cout << gpu_shape << std::endl;
             auto gpu_strides = make_strides(gpu_shape,std::string("d"),8);
                 std::cout << gpu_strides << std::endl;
             if (!(valid_format && *shape==gpu_shape && *strides==gpu_strides))
-                PyBuffer_Release(&view);
+                result = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
+            PyBuffer_Release(&view);
         }
     } else {
         abort();
     }
     PyObject_Del((void*)myobj);
-    return PyLong_FromLong(0);
+    return result;
 }
 
 static PyMethodDef gpu_reshaper_methods[] = {
