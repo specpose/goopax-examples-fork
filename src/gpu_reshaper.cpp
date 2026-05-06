@@ -177,6 +177,7 @@ static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal
 const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> python_types() {
     std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
     known_types[static_cast<type_enum_t>(10 * num_type_modes)].push_back(std::pair(std::string("d"),8));
+    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("i"),2));
     return known_types;
 };
 const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> register_types(goopax_device& d) {
@@ -264,7 +265,7 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
         goopax::envmode env = static_cast<goopax::envmode>(1 << 4);
         std::vector<goopax_device> dvec = test_env(env);
         if (!dvec.empty()){
-            printf("Got view format: %s\n, and len: %d", view.format, view.len);
+            printf("Got view format: %s, and len: %d\n", view.format, view.len);
             const auto shape = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.shape;
             std::cout << *shape << std::endl;
             const auto strides = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.strides;
@@ -321,6 +322,16 @@ PyMODINIT_FUNC PyInit_gpu_reshaper(void){
 int main(){
     PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
     Py_InitializeEx(0);
+
+    std::string create_ndarray = std::string("from sys import path\n")
+                                +std::string("path.append(\'../pyaudio-test\')\n");
+    PyRun_SimpleString(create_ndarray.c_str());
+    PyObject* numpy_test = PyImport_ImportModule("numpy_test");
+    PyObject* import_data = PyObject_GetAttrString(numpy_test,"import_data");
+    PyObject* import_data_args = PyTuple_New(1);
+    PyObject* filename = PyUnicode_FromString("../output.wav");
+    PyTuple_SetItem(import_data_args, 0, filename);
+    PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
 
     PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
     PyObject* test = PyObject_GetAttrString(gpu_reshaper,"test_memoryview");

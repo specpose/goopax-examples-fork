@@ -109,6 +109,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
 const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> python_types() {
     std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
     known_types[static_cast<type_enum_t>(10 * num_type_modes)].push_back(std::pair(std::string("d"),8));
+    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("i"),2));
     return known_types;
 };
 
