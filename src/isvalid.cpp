@@ -109,7 +109,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
 const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> python_types() {
     std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
     known_types[static_cast<type_enum_t>(10 * num_type_modes)].push_back(std::pair(std::string("d"),8));
-    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("i"),2));
+    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("h"),2));
     return known_types;
 };
 
@@ -183,8 +183,8 @@ int main()
                 auto registered_type = register_types(d);
 
                 for (const auto& t : registered_type)
-                    if (t.second[0].first==std::string("d"))
-                        cout << "\"" << t.second[0].first.c_str() << "\"" << endl;
+                    cout << "\"" << t.second[0].first.c_str() << "\", ";
+                cout << endl;
 
                 auto shape = check_shape(d, 92160);
                 auto strides = make_strides(shape,std::string("d"),8);

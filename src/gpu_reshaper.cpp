@@ -177,7 +177,7 @@ static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal
 const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> python_types() {
     std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
     known_types[static_cast<type_enum_t>(10 * num_type_modes)].push_back(std::pair(std::string("d"),8));
-    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("i"),2));
+    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("h"),2));
     return known_types;
 };
 const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> register_types(goopax_device& d) {
@@ -256,12 +256,13 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
     });
     return strides;
 };
-static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
+static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     PyObject* result = NULL;
-    PyTypeObject *MyType = (PyTypeObject*)PyType_FromSpec(&MyObject_Spec);
-    PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);
+    PyObject* ndarray = NULL;
+    PyArg_ParseTuple(args, "O", &ndarray);
+    printf("%x: Retrieving ndarray from tuple\n",ndarray);
     Py_buffer view;
-    if (PyObject_GetBuffer((PyObject*)myobj,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
+    if (PyObject_GetBuffer(ndarray,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         goopax::envmode env = static_cast<goopax::envmode>(1 << 4);
         std::vector<goopax_device> dvec = test_env(env);
         if (!dvec.empty()){
@@ -281,9 +282,9 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
                 if (valid_format)
                     break;
             }
-            auto gpu_shape = check_shape(dvec[0], view.len);
+            auto gpu_shape = check_shape(dvec[0], view.len/2);
                 std::cout << gpu_shape << std::endl;
-            auto gpu_strides = make_strides(gpu_shape,std::string("d"),8);
+            auto gpu_strides = make_strides(gpu_shape,std::string("h"),2);
                 std::cout << gpu_strides << std::endl;
             if (!(valid_format && *shape==gpu_shape && *strides==gpu_strides))
                 result = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
@@ -292,13 +293,12 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* what){
     } else {
         abort();
     }
-    PyObject_Del((void*)myobj);
     return result;
 }
 
 static PyMethodDef gpu_reshaper_methods[] = {
     {"process_memoryview", gpu_reshaper_process_memoryview, METH_VARARGS, ""},
-    {"test_memoryview", gpu_reshaper_test_memoryview, METH_NOARGS, ""},
+    {"test_memoryview", gpu_reshaper_test_memoryview, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
@@ -322,22 +322,36 @@ PyMODINIT_FUNC PyInit_gpu_reshaper(void){
 int main(){
     PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
     Py_InitializeEx(0);
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
 
-    std::string create_ndarray = std::string("from sys import path\n")
-                                +std::string("path.append(\'../pyaudio-test\')\n");
-    PyRun_SimpleString(create_ndarray.c_str());
+    PyObject* sys = PyImport_ImportModule("sys");
+    PyObject* path = PyObject_GetAttrString(sys,"path");
+    PyObject* append = PyObject_GetAttrString(path,"append");
+    PyObject* append_args = PyTuple_New(1);
+    PyObject* directory = PyUnicode_FromString("../pyaudio-test");
+    PyTuple_SetItem(append_args, 0, directory);
+    PyObject_CallObject(append,append_args);
+
     PyObject* numpy_test = PyImport_ImportModule("numpy_test");
     PyObject* import_data = PyObject_GetAttrString(numpy_test,"import_data");
     PyObject* import_data_args = PyTuple_New(1);
     PyObject* filename = PyUnicode_FromString("../output.wav");
     PyTuple_SetItem(import_data_args, 0, filename);
     PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
+    printf("%x: Got a numpy_array.\n",numpy_array);
+
 
     PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
     PyObject* test = PyObject_GetAttrString(gpu_reshaper,"test_memoryview");
-    PyObject* test_args = PyTuple_New(0);
-    //PyTuple_SetItem(test_args, 0, tm);
+    PyObject* test_args = PyTuple_New(1);
+    PyTuple_SetItem(test_args, 0, numpy_array);
     PyObject* test_object = PyObject_CallObject(test,test_args);
+
+    //PyTypeObject *MyType = (PyTypeObject*)PyType_FromSpec(&MyObject_Spec);
+    //PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);
+    //PyObject_Del((void*)myobj);
+    PyGILState_Release(gstate);
 #if DEBUG
     if (Py_FinalizeEx() < 0)
         abort();
