@@ -1,14 +1,16 @@
 #include <Python.h>
 #include <stdio.h>
 
-typedef double T;
-static const T test_data[] = {0,0,1,0,1+sqrt(2)/2,sqrt(2)/2,1+sqrt(2)/2,1+sqrt(2)/2};
+typedef short T;
 
 static void process(void* buffer, Py_ssize_t* strides, Py_ssize_t* shape){
-    printf("shape=(%d,%d)\n",shape[0],shape[1]);
     T* _buffer = (T*)buffer;
-    for (Py_ssize_t i=0; i<shape[0]*shape[1]; i+=2)
-        printf("(%f,%f)\n",_buffer[i],_buffer[i+1]);
+    for (Py_ssize_t i=0; i<shape[0]; ++i)
+        for (Py_ssize_t j=0; j<shape[1]; ++j)
+            for (Py_ssize_t k=0; k<shape[2]; ++k)
+                for (Py_ssize_t l=0; l<shape[3]; ++l)
+                    printf("%d,",_buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]);
+    printf("\n");
 }
 
 #define PY_SSIZE_T_CLEAN
@@ -31,12 +33,14 @@ void __delete(PyObject* X){
 
 static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
     PyObject* mvobject = NULL;
-    PyArg_ParseTuple(args, "O", &mvobject);
+    if (PyArg_ParseTuple(args, "O", &mvobject)) {
     printf("%x: Retrieving memoryview from tuple\n",mvobject);
     if (PyMemoryView_Check(mvobject)!=1)
         abort();
     Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
+    printf("view.len: %d, view.itemsize: %d\n",view->len,view->itemsize);
     process(view->buf,view->strides,view->shape);
+    }
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -64,93 +68,6 @@ static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::
     PyTuple_SetItem(result, 2, convert_descriptor_item(strides));
     return result;
 }
-
-typedef struct {
-    PyObject_VAR_HEAD
-    Py_ssize_t* shape;
-    Py_ssize_t* strides;
-    char* format;
-    T* ptr;
-} MyObject;
-static const char _format[] = "d"; // T
-int get_buffer(PyObject *exporter, Py_buffer *view, int flags){
-    printf("GetBuffer\n");
-    if ((flags & (PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)) == (PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)) {
-        view->ndim = 2;
-        Py_ssize_t* shape = ((MyObject*)exporter)->shape;
-        shape[0]=4;
-        shape[1]=2;
-        Py_ssize_t* strides = ((MyObject*)exporter)->strides;
-        strides[0]=16;
-        strides[1]=8;
-        view->shape = shape;
-        view->strides = strides;
-        view->suboffsets = NULL;
-        view->format = ((MyObject*)exporter)->format;
-        strcpy(view->format, _format);
-        view->itemsize = sizeof(T);
-        view->len = view->shape[0]*view->shape[1]*view->itemsize;
-        T* ptr = ((MyObject*)exporter)->ptr;
-        view->readonly = 1;
-        view->buf = (void*)ptr;
-        view->obj = exporter;
-    } else {
-        abort();
-    }
-    return 0;
-};
-void release_buffer(PyObject *exporter, Py_buffer *view){
-    printf("ReleaseBuffer\n");
-};
-PyObject *myobj_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds){
-    printf("New\n");
-    MyObject* buffy = (MyObject*)subtype->tp_alloc(subtype, 0);
-    if (buffy != NULL) {
-        buffy->shape = (Py_ssize_t*)malloc(PyBUF_MAX_NDIM*sizeof(Py_ssize_t));
-        buffy->strides = (Py_ssize_t*)malloc(PyBUF_MAX_NDIM*sizeof(Py_ssize_t));
-        buffy->format = (char*)malloc(sizeof(_format));
-        buffy->ptr = (T*)malloc(sizeof(test_data)*sizeof(T));
-    }
-    return (PyObject*)buffy;
-}
-void myobj_free(void *self) {
-    printf("Free\n");
-    MyObject* buffy = (MyObject*)self;
-    free((void*)buffy->shape);
-    free((void*)buffy->strides);
-    free((void*)buffy->format);
-    free((void*)buffy->ptr);
-}
-int myobj_init(PyObject* self, PyObject* args, PyObject* kwds) {
-    printf("Init\n");
-    MyObject* buffy = (MyObject*)self;
-    for (size_t i = 0; i < PyBUF_MAX_NDIM; ++i) {
-        buffy->shape[i] = 0;
-        buffy->strides[i] = 0;
-    }
-    strcpy(buffy->format, "x");
-    for (size_t i=0; i<sizeof(test_data)/sizeof(T); i++)
-        buffy->ptr[i] = test_data[i];
-    return 0;
-}
-static char _doc_string[] = "My objects";
-static PyType_Slot MyObject_Slots[] = {
-    {Py_tp_doc, _doc_string},
-    {Py_tp_new, (void*)myobj_new},
-    {Py_tp_init, (void*)myobj_init},
-    {Py_tp_free, (void*)myobj_free},
-    {Py_bf_getbuffer, (void*)get_buffer},
-    {Py_bf_releasebuffer, (void*)release_buffer},
-    {0, NULL}
-};
-static const char _name[] = "mymod.MyObject";
-static PyType_Spec MyObject_Spec = {
-    .name = _name,
-    .basicsize = sizeof(MyObject),
-    .itemsize = 0,
-    .flags = Py_TPFLAGS_DEFAULT,
-    .slots = MyObject_Slots
-};
 
 namespace std
 {
@@ -259,7 +176,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     PyObject* result = NULL;
     PyObject* ndarray = NULL;
-    PyArg_ParseTuple(args, "O", &ndarray);
+    if (PyArg_ParseTuple(args, "O", &ndarray)) {
     printf("%x: Retrieving ndarray from tuple\n",ndarray);
     Py_buffer view;
     if (PyObject_GetBuffer(ndarray,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
@@ -292,6 +209,7 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
         }
     } else {
         abort();
+    }
     }
     return result;
 }
@@ -340,17 +258,29 @@ int main(){
     PyTuple_SetItem(import_data_args, 0, filename);
     PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
     printf("%x: Got a numpy_array.\n",numpy_array);
-
+    PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
 
     PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
+    PyObject* process_call = PyObject_GetAttrString(gpu_reshaper,"process_memoryview");
     PyObject* test = PyObject_GetAttrString(gpu_reshaper,"test_memoryview");
     PyObject* test_args = PyTuple_New(1);
     PyTuple_SetItem(test_args, 0, numpy_array);
-    PyObject* test_object = PyObject_CallObject(test,test_args);
+    PyObject* descriptor = PyObject_CallObject(test,test_args);
+    PyObject* shape = PyTuple_GetItem(descriptor, 1);
+    //PyObject_Print(shape,stdout,Py_PRINT_RAW);
+    PyObject* shape_args = PyTuple_New(1);
+    PyTuple_SetItem(shape_args, 0, shape);
 
-    //PyTypeObject *MyType = (PyTypeObject*)PyType_FromSpec(&MyObject_Spec);
-    //PyObject* myobj = PyObject_CallObject((PyObject*)MyType,NULL);
-    //PyObject_Del((void*)myobj);
+    numpy_array = PyObject_CallObject(reshape, shape_args);
+    //PyObject_Print(numpy_array,stdout,Py_PRINT_RAW);
+    //Py_buffer view;
+    //if (PyObject_GetBuffer(numpy_array,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
+        PyObject* process_args = PyTuple_New(1);
+        PyTuple_SetItem(process_args, 0, PyMemoryView_FromObject(numpy_array));
+        PyObject* result = PyObject_CallObject(process_call, process_args);
+        //process(view.buf, view.strides, view.shape);
+    //}
+
     PyGILState_Release(gstate);
 #if DEBUG
     if (Py_FinalizeEx() < 0)
