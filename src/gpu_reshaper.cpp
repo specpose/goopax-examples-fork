@@ -173,8 +173,9 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
     });
     return strides;
 };
+#include <iomanip>
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
-    PyObject* result = NULL;
+    PyObject* result = PyList_New(0);
     PyObject* ndarray = NULL;
     if (PyArg_ParseTuple(args, "O", &ndarray)) {
     printf("%x: Retrieving ndarray from tuple\n",ndarray);
@@ -182,8 +183,14 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     if (PyObject_GetBuffer(ndarray,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         goopax::envmode env = static_cast<goopax::envmode>(1 << 4);
         std::vector<goopax_device> dvec = test_env(env);
+        PyObject* Env = PyTuple_New(2);
+        PyTuple_SetItem(Env, 0, PyLong_FromLong(4));
         if (!dvec.empty()){
-            printf("Got view format: %s, and len: %d\n", view.format, view.len);
+            PyObject* Device = PyTuple_New(2);
+            const std::array< uint8_t, 16 > device_id = dvec[0].uuid();
+            PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
+
+            /*printf("Got view format: %s, and len: %d\n", view.format, view.len);
             const auto shape = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.shape;
             std::cout << *shape << std::endl;
             const auto strides = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.strides;
@@ -198,15 +205,20 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
                     }
                 if (valid_format)
                     break;
-            }
+            }*/
             auto gpu_shape = check_shape(dvec[0], view.len/2);
                 std::cout << gpu_shape << std::endl;
             auto gpu_strides = make_strides(gpu_shape,std::string("h"),2);
                 std::cout << gpu_strides << std::endl;
-            if (!(valid_format && *shape==gpu_shape && *strides==gpu_strides))
-                result = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
-            PyBuffer_Release(&view);
+            //if (!(valid_format && *shape==gpu_shape && *strides==gpu_strides)){
+                PyObject* descr = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
+                PyTuple_SetItem(Device, 1, descr);
+            //}
+            PyTuple_SetItem(Env, 1, Device);
         }
+        //Py_INCREF(Env);
+        PyList_Append(result, Env);
+        PyBuffer_Release(&view);
     } else {
         abort();
     }
@@ -266,20 +278,21 @@ int main(){
     PyObject* test_args = PyTuple_New(1);
     PyTuple_SetItem(test_args, 0, numpy_array);
     PyObject* descriptor = PyObject_CallObject(test,test_args);
-    PyObject* shape = PyTuple_GetItem(descriptor, 1);
-    //PyObject_Print(shape,stdout,Py_PRINT_RAW);
-    PyObject* shape_args = PyTuple_New(1);
-    PyTuple_SetItem(shape_args, 0, shape);
+    PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
+    if (PyList_Size(descriptor)>0){
+        PyObject* env = PyList_GetItem(descriptor, 0);
+        PyObject* device = PyTuple_GetItem(env, 1);
+        PyObject* descr = PyTuple_GetItem(device,1);
+        PyObject* shape = PyTuple_GetItem(descr,1);
+        PyObject_Print(shape,stdout,Py_PRINT_RAW);
+        PyObject* shape_args = PyTuple_New(1);
+        PyTuple_SetItem(shape_args, 0, shape);
 
-    numpy_array = PyObject_CallObject(reshape, shape_args);
-    //PyObject_Print(numpy_array,stdout,Py_PRINT_RAW);
-    //Py_buffer view;
-    //if (PyObject_GetBuffer(numpy_array,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
+        numpy_array = PyObject_CallObject(reshape, shape_args);
         PyObject* process_args = PyTuple_New(1);
         PyTuple_SetItem(process_args, 0, PyMemoryView_FromObject(numpy_array));
         PyObject* result = PyObject_CallObject(process_call, process_args);
-        //process(view.buf, view.strides, view.shape);
-    //}
+    }
 
     PyGILState_Release(gstate);
 #if DEBUG
