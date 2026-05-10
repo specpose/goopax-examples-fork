@@ -186,54 +186,40 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     if (PyObject_GetBuffer(ndarray,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         printf("Got view format: %s, and len: %d\n", view.format, view.len);
         for (unsigned int log_env = 0; log_env < 10; ++log_env) {
-        goopax::envmode env = static_cast<goopax::envmode>(1 << log_env);
-        std::vector<goopax_device> dvec = test_env(env);
-        if (!dvec.empty()){
-            PyObject* Env = PyTuple_New(2);
-            PyTuple_SetItem(Env, 0, PyLong_FromLong(log_env));
-            PyObject* Devices = PyList_New(0);
-            //for
-            for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
-                auto registered_type = register_types(dvec[device_i]);
-                for (const auto& dev_ts : registered_type){
+            goopax::envmode env = static_cast<goopax::envmode>(1 << log_env);
+            std::vector<goopax_device> dvec = test_env(env);
+            if (!dvec.empty()){
+                PyObject* Env = PyTuple_New(2);
+                PyTuple_SetItem(Env, 0, PyLong_FromLong(log_env));
+                PyObject* Devices = PyList_New(0);
+                for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
+                    //if (!(*shape==gpu_shape && *strides==gpu_strides))
+                    auto registered_type = register_types(dvec[device_i]);
+                    for (const auto& dev_ts : registered_type){
                     for (const auto& t : dev_ts.second){
                     if (t.first == view.format && t.second == view.itemsize) {
-            PyObject* Device = PyTuple_New(2);
-            const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
-            PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
+                        PyObject* Device = PyTuple_New(2);
+                        const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
+                        PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
 
-            std::cout << safe_copy((Py_ssize_t*)view.shape, view.ndim) << std::endl;
-            std::cout << safe_copy((Py_ssize_t*)view.strides, view.ndim) << std::endl;
+                        std::cout << safe_copy((Py_ssize_t*)view.shape, view.ndim) << std::endl;
+                        std::cout << safe_copy((Py_ssize_t*)view.strides, view.ndim) << std::endl;
 
-            /*
-            bool valid_format = false;
-
-                for (const auto& p : ts.second)
-                    if (p.first==view.format){
-                        valid_format = true;
-                        break;
-                    }
-                if (valid_format)
-                    break;
-            */
-            auto gpu_shape = check_shape(dvec[device_i], view.len/view.itemsize);
-                std::cout << gpu_shape << std::endl;
-            auto gpu_strides = make_strides(gpu_shape, view.itemsize);
-                std::cout << gpu_strides << std::endl;
-            //if (!(valid_format && *shape==gpu_shape && *strides==gpu_strides)){
-                PyObject* descr = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
-                PyTuple_SetItem(Device, 1, descr);
-            //}
-            PyList_Append(Devices, Device);
+                        auto gpu_shape = check_shape(dvec[device_i], view.len/view.itemsize);
+                            std::cout << gpu_shape << std::endl;
+                        auto gpu_strides = make_strides(gpu_shape, view.itemsize);
+                            std::cout << gpu_strides << std::endl;
+                        PyObject* descr = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
+                        PyTuple_SetItem(Device, 1, descr);
+                        PyList_Append(Devices, Device);
                     }
                     }
                     }
+                    }
+                    PyTuple_SetItem(Env, 1, Devices);
+                    PyList_Append(result, Env);
                 }
-                //end for
-                PyTuple_SetItem(Env, 1, Devices);
-                PyList_Append(result, Env);
             }
-        }
         }
         PyBuffer_Release(&view);
     } else {
