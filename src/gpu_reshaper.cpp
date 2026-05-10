@@ -3,14 +3,26 @@
 
 typedef short T;
 
-static void process(void* buffer, Py_ssize_t* strides, Py_ssize_t* shape){
+#include <functional>
+#include <goopax_extra/types.hpp>
+using namespace goopax;
+std::function<
+    void(void* buffer, std::array<Py_ssize_t, PyBUF_MAX_NDIM> strides, std::array<Py_ssize_t, PyBUF_MAX_NDIM> shape)>
+make_kernel_function(type_enum_t type)
+{
+    return [&type](void* buffer, std::array<Py_ssize_t, PyBUF_MAX_NDIM> strides, std::array<Py_ssize_t, PyBUF_MAX_NDIM> shape){
     T* _buffer = (T*)buffer;
-    for (Py_ssize_t i=0; i<shape[0]; ++i)
-        for (Py_ssize_t j=0; j<shape[1]; ++j)
-            for (Py_ssize_t k=0; k<shape[2]; ++k)
-                for (Py_ssize_t l=0; l<shape[3]; ++l)
-                    printf("%d,",_buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]);
+    for (Py_ssize_t i=0; i<shape[0]; ++i) {
+        for (Py_ssize_t j=0; j<shape[1]; ++j) {
+            for (Py_ssize_t k=0; k<shape[2]; ++k) {
+                for (Py_ssize_t l=0; l<shape[3]; ++l) {
+                    _buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]=_buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]*2;
+                }
+            }
+        }
+    }
     printf("\n");
+    };
 }
 
 #define PY_SSIZE_T_CLEAN
@@ -31,6 +43,14 @@ void __delete(PyObject* X){
 #define Py_DECREF(X) __delete(X);
 #endif
 
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t len) {
+    std::array<Py_ssize_t, PyBUF_MAX_NDIM> copy{};
+    std::fill(std::begin(copy), std::end(copy), 0);
+    for (Py_ssize_t i = 0; i < len; ++i)
+        copy[i] = *(first + i);
+    return copy;
+};
+#include <goopax_extra/output.hpp>
 static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
     PyObject* mvobject = NULL;
     if (PyArg_ParseTuple(args, "O", &mvobject)) {
@@ -39,11 +59,18 @@ static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args)
         abort();
     Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
     printf("view.len: %d, view.itemsize: %d\n",view->len,view->itemsize);
-    //process(view->buf,view->strides,view->shape);
+    auto func = make_kernel_function(type_enum<T>::value);
+    auto shape = safe_copy(view->shape, view->ndim);
+    auto strides = safe_copy(view->strides, view->ndim);
+    func(view->buf,strides,shape);
+    for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
+        printf("%d,",((T*)view->buf)[i]);
+    //std::cout<< buffy << std::endl;
     }
     Py_INCREF(Py_None);
     return Py_None;
 }
+
 #include <algorithm>
 #include <array>
 #include <string>
@@ -86,9 +113,7 @@ std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
     return s;
 }
 }
-#include <goopax_extra/types.hpp>
 #include <map>
-using namespace goopax;
 static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal", "Vulkan" };
 std::string type_to_python_name(type_enum_t type) { return type_enum_raw_names[type / num_type_modes]; };
 static std::map<type_enum_t, std::map<std::string, Py_ssize_t>> known_types {
@@ -169,13 +194,6 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
         }
     });
     return strides;
-};
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t len) {
-    std::array<Py_ssize_t, PyBUF_MAX_NDIM> copy{};
-    std::fill(std::begin(copy), std::end(copy), 0);
-    for (Py_ssize_t i = 0; i < len; ++i)
-        copy[i] = *(first + i);
-    return copy;
 };
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     PyObject* result = PyList_New(0);
@@ -261,7 +279,7 @@ int main(){
     PyObject* path = PyObject_GetAttrString(sys,"path");
     PyObject* append = PyObject_GetAttrString(path,"append");
     PyObject* append_args = PyTuple_New(1);
-    PyObject* directory = PyUnicode_FromString("../pyaudio-test");
+    PyObject* directory = PyUnicode_FromString("../python-modules");
     PyTuple_SetItem(append_args, 0, directory);
     PyObject_CallObject(append,append_args);
 
