@@ -31,8 +31,8 @@ def import_data(filename):
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
     dt = numpy.dtype('i'+str(int(header["bits_per_sample"][0]/8)))
-    print(dt.isbuiltin)
-    print(dt.char)
+    #print(dt.isbuiltin)
+    #print(dt.char)
     result = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
     f.close()
     return result

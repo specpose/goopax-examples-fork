@@ -51,7 +51,6 @@ static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args)
 template<typename T>
 PyObject* convert_descriptor_item(T& arr) {
     auto pos = std::find(std::begin(arr),std::end(arr),0);
-    std::cout << "pos: " << std::distance(std::begin(arr), pos) << std::endl;
     PyObject* result = PyTuple_New(std::distance(std::begin(arr), pos));
     for (std::size_t i = 0; i < std::distance(std::begin(arr), pos); ++i) {
         PyObject* element = PyLong_FromLong(arr[i]);
@@ -158,7 +157,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d, const Py_ss
 
     return shape;
 };
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const std::string format, const Py_ssize_t itemsize) {
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const Py_ssize_t itemsize) {
     auto strides = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::copy(begin(shape), end(shape), begin(strides));
     Py_ssize_t previous_stridesize = itemsize;
@@ -171,7 +170,13 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
     });
     return strides;
 };
-#include <iomanip>
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t len) {
+    std::array<Py_ssize_t, PyBUF_MAX_NDIM> copy{};
+    std::fill(std::begin(copy), std::end(copy), 0);
+    for (Py_ssize_t i = 0; i < len; ++i)
+        copy[i] = *(first + i);
+    return copy;
+};
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     PyObject* result = PyList_New(0);
     PyObject* ndarray = NULL;
@@ -179,23 +184,30 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     printf("%x: Retrieving ndarray from tuple\n",ndarray);
     Py_buffer view;
     if (PyObject_GetBuffer(ndarray,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
-        goopax::envmode env = static_cast<goopax::envmode>(1 << 4);
+        printf("Got view format: %s, and len: %d\n", view.format, view.len);
+        for (unsigned int log_env = 0; log_env < 10; ++log_env) {
+        goopax::envmode env = static_cast<goopax::envmode>(1 << log_env);
         std::vector<goopax_device> dvec = test_env(env);
-        PyObject* Env = PyTuple_New(2);
-        PyTuple_SetItem(Env, 0, PyLong_FromLong(4));
         if (!dvec.empty()){
+            PyObject* Env = PyTuple_New(2);
+            PyTuple_SetItem(Env, 0, PyLong_FromLong(log_env));
+            PyObject* Devices = PyList_New(0);
+            //for
+            for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
+                auto registered_type = register_types(dvec[device_i]);
+                for (const auto& dev_ts : registered_type){
+                    for (const auto& t : dev_ts.second){
+                    if (t.first == view.format && t.second == view.itemsize) {
             PyObject* Device = PyTuple_New(2);
-            const std::array< uint8_t, 16 > device_id = dvec[0].uuid();
+            const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
             PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
 
-            /*printf("Got view format: %s, and len: %d\n", view.format, view.len);
-            const auto shape = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.shape;
-            std::cout << *shape << std::endl;
-            const auto strides = (std::array<Py_ssize_t, PyBUF_MAX_NDIM>*)view.strides;
-            std::cout << *strides << std::endl;
-            auto registered_type = register_types(dvec[0]);
+            std::cout << safe_copy((Py_ssize_t*)view.shape, view.ndim) << std::endl;
+            std::cout << safe_copy((Py_ssize_t*)view.strides, view.ndim) << std::endl;
+
+            /*
             bool valid_format = false;
-            for (const auto& ts : registered_type){
+
                 for (const auto& p : ts.second)
                     if (p.first==view.format){
                         valid_format = true;
@@ -203,23 +215,29 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
                     }
                 if (valid_format)
                     break;
-            }*/
-            auto gpu_shape = check_shape(dvec[0], view.len/2);
+            */
+            auto gpu_shape = check_shape(dvec[device_i], view.len/view.itemsize);
                 std::cout << gpu_shape << std::endl;
-            auto gpu_strides = make_strides(gpu_shape,std::string("h"),2);
+            auto gpu_strides = make_strides(gpu_shape, view.itemsize);
                 std::cout << gpu_strides << std::endl;
             //if (!(valid_format && *shape==gpu_shape && *strides==gpu_strides)){
                 PyObject* descr = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
                 PyTuple_SetItem(Device, 1, descr);
             //}
-            PyTuple_SetItem(Env, 1, Device);
+            PyList_Append(Devices, Device);
+                    }
+                    }
+                    }
+                }
+                //end for
+                PyTuple_SetItem(Env, 1, Devices);
+                PyList_Append(result, Env);
+            }
         }
-        //Py_INCREF(Env);
-        PyList_Append(result, Env);
+        }
         PyBuffer_Release(&view);
     } else {
         abort();
-    }
     }
     return result;
 }
@@ -277,12 +295,16 @@ int main(){
     PyTuple_SetItem(test_args, 0, numpy_array);
     PyObject* descriptor = PyObject_CallObject(test,test_args);
     PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
+    printf("\n");
     if (PyList_Size(descriptor)>0){
-        PyObject* env = PyList_GetItem(descriptor, 0);
-        PyObject* device = PyTuple_GetItem(env, 1);
+        PyObject* env = PyList_GetItem(descriptor, 1);
+        PyObject* devices = PyTuple_GetItem(env, 1);
+        PyObject* device = PyList_GetItem(devices, 0);
         PyObject* descr = PyTuple_GetItem(device,1);
         PyObject* shape = PyTuple_GetItem(descr,1);
+        printf("Python ndarray reshaping to:\n");
         PyObject_Print(shape,stdout,Py_PRINT_RAW);
+        printf("\n");
         PyObject* shape_args = PyTuple_New(1);
         PyTuple_SetItem(shape_args, 0, shape);
 

@@ -92,7 +92,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> intel_hd_530(goopax_device& d, const Py_s
     return shape;
 }
 
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const std::string format, const Py_ssize_t itemsize) {
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const Py_ssize_t itemsize) {
     auto strides = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::copy(begin(shape), end(shape), begin(strides));
     Py_ssize_t previous_stridesize = itemsize;
@@ -184,7 +184,7 @@ int main()
                 cout << endl;
 
                 auto shape = check_shape(d, 92160);
-                auto strides = make_strides(shape,std::string("d"),8);
+                auto strides = make_strides(shape, 8);
                 cout << shape << endl;
                 cout << strides << endl;
             }
