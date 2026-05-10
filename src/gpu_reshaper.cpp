@@ -51,19 +51,34 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t l
 };
 #include <goopax_extra/output.hpp>
 static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
+    int log_env = 0;
+    const char* gpu_uuid = NULL;
+    Py_ssize_t gpu_uuid_length;
     PyObject* mvobject = NULL;
-    if (PyArg_ParseTuple(args, "O", &mvobject)) {
-    if (PyMemoryView_Check(mvobject)!=1)
-        abort();
-    Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
-    printf("Retrieved memoryview from ndarray, view.len: %d, view.itemsize: %d\n", view->len, view->itemsize);
-    auto func = make_kernel_function(type_enum<T>::value);
-    auto shape = safe_copy(view->shape, view->ndim);
-    auto strides = safe_copy(view->strides, view->ndim);
-    func(view->buf,strides,shape);
-    //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
-    //    printf("%d,",((T*)view->buf)[i]);
-    //std::cout<< buffy << std::endl;
+
+    if (PyArg_ParseTuple(args, "iy#O", &log_env, &gpu_uuid, &gpu_uuid_length, &mvobject)) {
+        const Py_ssize_t d_uuid_length = std::tuple_size<std::array< uint8_t, 16 >>{};
+        if (gpu_uuid_length!=d_uuid_length)
+            abort();
+
+        envmode env = static_cast<envmode>(1 << log_env);
+        std::vector<goopax_device> dvec = devices(static_cast<goopax::envmode>(env));
+        for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
+            const std::array< uint8_t, d_uuid_length >& d_uuid= dvec[device_i].uuid();
+            if (memcmp(gpu_uuid, d_uuid.data(), d_uuid_length) == 0) {
+                if (PyMemoryView_Check(mvobject)!=1)
+                    abort();
+                Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
+                printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
+                auto func = make_kernel_function(type_enum<T>::value);
+                auto shape = safe_copy(view->shape, view->ndim);
+                auto strides = safe_copy(view->strides, view->ndim);
+                func(view->buf,strides,shape);
+                //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
+                //    printf("%d,",((T*)view->buf)[i]);
+                //std::cout<< buffy << std::endl;
+            }
+        }
     }
     Py_INCREF(Py_None);
     return Py_None;
@@ -285,7 +300,7 @@ int main(){
     PyObject* filename = PyUnicode_FromString(arg1);
     PyTuple_SetItem(import_data_args, 0, filename);
     PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
-    printf("Imported data from file %s.\n", arg1);
+    printf("Imported data from file \"%s\".\n", arg1);
     PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
 
     PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
@@ -298,22 +313,27 @@ int main(){
     PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
     printf("\n");
     if (PyList_Size(descriptor)>0){
-        PyObject* env = PyList_GetItem(descriptor, 1);
-        PyObject* devices = PyTuple_GetItem(env, 1);
-        PyObject* device = PyList_GetItem(devices, 0);
-        PyObject* descr = PyTuple_GetItem(device,1);
-        PyObject* shape = PyTuple_GetItem(descr,1);
+        PyObject* ds = PyImport_ImportModule("device_selector");
+        PyObject* select = PyObject_GetAttrString(ds,"retrieve_shape");
+        PyObject* select_args = PyTuple_New(1);
+        PyTuple_SetItem(select_args, 0, descriptor);
+        PyObject* selection = PyObject_CallObject(select,select_args);
+        PyObject* shape = PyTuple_GetItem(selection, 2);
+
         printf("Python ndarray reshaping to:\n");
         PyObject_Print(shape,stdout,Py_PRINT_RAW);
         printf("\n");
         PyObject* shape_args = PyTuple_New(1);
         PyTuple_SetItem(shape_args, 0, shape);
-
         numpy_array = PyObject_CallObject(reshape, shape_args);
-        PyObject* process_args = PyTuple_New(1);
-        PyTuple_SetItem(process_args, 0, PyMemoryView_FromObject(numpy_array));
+
+        PyObject* process_args = PyTuple_New(3);
+        PyTuple_SetItem(process_args, 0, PyTuple_GetItem(selection, 0));
+        PyTuple_SetItem(process_args, 1, PyTuple_GetItem(selection, 1));
+        PyTuple_SetItem(process_args, 2, PyMemoryView_FromObject(numpy_array));
         PyObject* result = PyObject_CallObject(process_call, process_args);
 
+        printf("Exporting data to file \"%s\".\n", arg1);
         PyObject* export_data = PyObject_GetAttrString(numpy_test,"export_data");
         PyObject* export_data_args = PyTuple_New(2);
         PyTuple_SetItem(export_data_args, 0, filename);
