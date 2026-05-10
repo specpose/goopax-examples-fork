@@ -106,24 +106,21 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t,
     return strides;
 };
 
-const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> python_types() {
-    std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
-    known_types[static_cast<type_enum_t>(10 * num_type_modes)].push_back(std::pair(std::string("d"),8));
-    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("h"),2));
-    return known_types;
+std::string type_to_python_name(type_enum_t type) { return type_enum_raw_names[type / num_type_modes]; };
+static std::map<type_enum_t, std::map<std::string, Py_ssize_t>> known_types {
+    {type_enum<double>::value, { {std::string("d"),8} }},
+    {type_enum<int16_t>::value, { {std::string("h"),2} }}
 };
-
-const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> register_types(goopax_device& d) {
+const std::map<type_enum_t, std::map<std::string, Py_ssize_t>> register_types(goopax_device& d) {
     const char* delim = " ";
-    auto type_to_python = python_types();
-    std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> registered_type{};
+    std::map<type_enum_t, std::map<std::string, Py_ssize_t>> registered_type{};
     for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
     {
         const auto enumerated_type = static_cast<type_enum_t>(t * num_type_modes);
         if (d.support_type(enumerated_type))
         {
-            if (type_to_python.find(enumerated_type) != end(type_to_python))
-                registered_type[enumerated_type] = type_to_python[enumerated_type];
+            if (known_types.find(enumerated_type) != end(known_types))
+                registered_type[enumerated_type] = known_types[enumerated_type];
             cout << delim << type_enum_raw_names[t];
             delim = ", ";
         }
@@ -183,7 +180,7 @@ int main()
                 auto registered_type = register_types(d);
 
                 for (const auto& t : registered_type)
-                    cout << "\"" << t.second[0].first.c_str() << "\", ";
+                    cout << "\"" << type_to_python_name(t.first) << "\", ";
                 cout << endl;
 
                 auto shape = check_shape(d, 92160);

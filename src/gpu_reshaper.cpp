@@ -39,7 +39,7 @@ static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args)
         abort();
     Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
     printf("view.len: %d, view.itemsize: %d\n",view->len,view->itemsize);
-    process(view->buf,view->strides,view->shape);
+    //process(view->buf,view->strides,view->shape);
     }
     Py_INCREF(Py_None);
     return Py_None;
@@ -91,22 +91,20 @@ std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
 #include <map>
 using namespace goopax;
 static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal", "Vulkan" };
-const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> python_types() {
-    std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> known_types{};
-    known_types[static_cast<type_enum_t>(10 * num_type_modes)].push_back(std::pair(std::string("d"),8));
-    known_types[static_cast<type_enum_t>(3 * num_type_modes)].push_back(std::pair(std::string("h"),2));
-    return known_types;
+std::string type_to_python_name(type_enum_t type) { return type_enum_raw_names[type / num_type_modes]; };
+static std::map<type_enum_t, std::map<std::string, Py_ssize_t>> known_types {
+    {type_enum<double>::value, { {std::string("d"),8} }},
+    {type_enum<int16_t>::value, { {std::string("h"),2} }}
 };
-const std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> register_types(goopax_device& d) {
-    auto type_to_python = python_types();
-    std::map<type_enum_t, std::vector<std::pair<std::string, Py_ssize_t>>> registered_type{};
+const std::map<type_enum_t, std::map<std::string, Py_ssize_t>> register_types(goopax_device& d) {
+    std::map<type_enum_t, std::map<std::string, Py_ssize_t>> registered_type{};
     for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
     {
         const auto enumerated_type = static_cast<type_enum_t>(t * num_type_modes);
         if (d.support_type(enumerated_type))
         {
-            if (type_to_python.find(enumerated_type) != end(type_to_python))
-                registered_type[enumerated_type] = type_to_python[enumerated_type];
+            if (known_types.find(enumerated_type) != end(known_types))
+                registered_type[enumerated_type] = known_types[enumerated_type];
         }
     }
     return registered_type;
