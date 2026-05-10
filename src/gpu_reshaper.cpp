@@ -21,7 +21,6 @@ make_kernel_function(type_enum_t type)
             }
         }
     }
-    printf("\n");
     };
 }
 
@@ -54,17 +53,16 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t l
 static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
     PyObject* mvobject = NULL;
     if (PyArg_ParseTuple(args, "O", &mvobject)) {
-    printf("%x: Retrieving memoryview from tuple\n",mvobject);
     if (PyMemoryView_Check(mvobject)!=1)
         abort();
     Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
-    printf("view.len: %d, view.itemsize: %d\n",view->len,view->itemsize);
+    printf("Retrieved memoryview from ndarray, view.len: %d, view.itemsize: %d\n", view->len, view->itemsize);
     auto func = make_kernel_function(type_enum<T>::value);
     auto shape = safe_copy(view->shape, view->ndim);
     auto strides = safe_copy(view->strides, view->ndim);
     func(view->buf,strides,shape);
-    for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
-        printf("%d,",((T*)view->buf)[i]);
+    //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
+    //    printf("%d,",((T*)view->buf)[i]);
     //std::cout<< buffy << std::endl;
     }
     Py_INCREF(Py_None);
@@ -87,7 +85,6 @@ PyObject* convert_descriptor_item(T& arr) {
 }
 static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& strides){
     PyObject* result = PyTuple_New(3);
-    printf("%x: MemoryView Descriptor created\n",result);
     PyObject* f = PyUnicode_FromString(format.c_str());
     PyTuple_SetItem(result, 0, f);
     PyTuple_SetItem(result, 1, convert_descriptor_item(shape));
@@ -199,7 +196,6 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     PyObject* result = PyList_New(0);
     PyObject* ndarray = NULL;
     if (PyArg_ParseTuple(args, "O", &ndarray)) {
-    printf("%x: Retrieving ndarray from tuple\n",ndarray);
     Py_buffer view;
     if (PyObject_GetBuffer(ndarray,&view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         printf("Got view format: %s, and len: %d\n", view.format, view.len);
@@ -219,14 +215,12 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
                         PyObject* Device = PyTuple_New(2);
                         const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
                         PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
-
-                        std::cout << safe_copy((Py_ssize_t*)view.shape, view.ndim) << std::endl;
-                        std::cout << safe_copy((Py_ssize_t*)view.strides, view.ndim) << std::endl;
-
+                        //std::cout << safe_copy((Py_ssize_t*)view.shape, view.ndim) << std::endl;
+                        //std::cout << safe_copy((Py_ssize_t*)view.strides, view.ndim) << std::endl;
                         auto gpu_shape = check_shape(dvec[device_i], view.len/view.itemsize);
-                            std::cout << gpu_shape << std::endl;
+                        //std::cout << gpu_shape << std::endl;
                         auto gpu_strides = make_strides(gpu_shape, view.itemsize);
-                            std::cout << gpu_strides << std::endl;
+                        //std::cout << gpu_strides << std::endl;
                         PyObject* descr = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
                         PyTuple_SetItem(Device, 1, descr);
                         PyList_Append(Devices, Device);
@@ -270,6 +264,8 @@ PyMODINIT_FUNC PyInit_gpu_reshaper(void){
 
 #if !MODULE_LIBRARY
 int main(){
+    const char* arg1 = "../output.wav";
+
     PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
     Py_InitializeEx(0);
     PyGILState_STATE gstate;
@@ -286,10 +282,10 @@ int main(){
     PyObject* numpy_test = PyImport_ImportModule("numpy_test");
     PyObject* import_data = PyObject_GetAttrString(numpy_test,"import_data");
     PyObject* import_data_args = PyTuple_New(1);
-    PyObject* filename = PyUnicode_FromString("../output.wav");
+    PyObject* filename = PyUnicode_FromString(arg1);
     PyTuple_SetItem(import_data_args, 0, filename);
     PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
-    printf("%x: Got a numpy_array.\n",numpy_array);
+    printf("Imported data from file %s.\n", arg1);
     PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
 
     PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
@@ -298,6 +294,7 @@ int main(){
     PyObject* test_args = PyTuple_New(1);
     PyTuple_SetItem(test_args, 0, numpy_array);
     PyObject* descriptor = PyObject_CallObject(test,test_args);
+    printf("Dumping memoryview descriptor:\n");
     PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
     printf("\n");
     if (PyList_Size(descriptor)>0){
@@ -316,6 +313,12 @@ int main(){
         PyObject* process_args = PyTuple_New(1);
         PyTuple_SetItem(process_args, 0, PyMemoryView_FromObject(numpy_array));
         PyObject* result = PyObject_CallObject(process_call, process_args);
+
+        PyObject* export_data = PyObject_GetAttrString(numpy_test,"export_data");
+        PyObject* export_data_args = PyTuple_New(2);
+        PyTuple_SetItem(export_data_args, 0, filename);
+        PyTuple_SetItem(export_data_args, 1, numpy_array);
+        PyObject_CallObject(export_data,export_data_args);
     }
 
     PyGILState_Release(gstate);

@@ -37,6 +37,15 @@ def import_data(filename):
     f.close()
     return result
 
+def export_data(filename, arr):
+    header = import_header(filename)
+    f = open(filename, 'rb+')
+    if (header["audio_fmt"][0] != 1):
+        raise Exception("Not PCM Integer")
+    f.seek(44)
+    f.write(arr.tobytes())
+    f.close()
+
 import sys
 if __name__ == "__main__":
     header = import_header(sys.argv[1])
