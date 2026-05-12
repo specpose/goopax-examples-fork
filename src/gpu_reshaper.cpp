@@ -8,10 +8,6 @@ typedef short T;
 using namespace goopax;
 static const Py_ssize_t queue_variables = 3;
 static const Py_ssize_t user_variables = 1;
-template<typename FUNC>
-class simd_kernel : kernel<FUNC>{
-};
-
 std::function<void(resource<T>&,gpu_int,gpu_int,gpu_int)> simd_function(goopax_device& d) {
     unsigned int shape3 = d.max_registers();
     return [&shape3](resource<T>& buffer, gpu_int shape0, gpu_int shape1, gpu_int shape2)->void{
@@ -85,8 +81,7 @@ static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args)
                 printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
                 auto shape = safe_copy(view->shape, view->ndim);
                 auto strides = safe_copy(view->strides, view->ndim);
-                printf("%d, %d\n",sizeof(Py_ssize_t),sizeof(long));
-                printf("device min host ptr alignment: %d\n",dvec[device_i].min_host_ptr_alignment());
+                printf("Device min host ptr alignment: %d\n",dvec[device_i].min_host_ptr_alignment());
                 buffer<T> buffy(dvec[device_i], view->len, (T*)view->buf, BUFFER_READ_WRITE);
                 kernel<void(buffer<T>&,int,int,int)> process(dvec[device_i], simd_function(dvec[device_i]), shape[0]*shape[1], shape[1]);
                 //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
@@ -122,105 +117,8 @@ static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::
     return result;
 }
 
-namespace std
-{
-template<typename T, size_t N>
-std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
-{
-    s << "(";
-    for (size_t k = 0; k < N; ++k)
-    {
-        if (k != 0)
-        {
-            s << ", ";
-        }
-        s << a[k];
-    }
-    s << ")";
-    return s;
-}
-}
 #include <map>
-static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal", "Vulkan" };
-std::string type_to_python_name(type_enum_t type) { return type_enum_raw_names[type / num_type_modes]; };
-static std::map<type_enum_t, std::map<std::string, Py_ssize_t>> known_types {
-    {type_enum<double>::value, { {std::string("d"),8} }},
-    {type_enum<int16_t>::value, { {std::string("h"),2} }}
-};
-const std::map<type_enum_t, std::map<std::string, Py_ssize_t>> register_types(goopax_device& d) {
-    std::map<type_enum_t, std::map<std::string, Py_ssize_t>> registered_type{};
-    for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
-    {
-        const auto enumerated_type = static_cast<type_enum_t>(t * num_type_modes);
-        if (d.support_type(enumerated_type))
-        {
-            if (known_types.find(enumerated_type) != end(known_types))
-                registered_type[enumerated_type] = known_types[enumerated_type];
-        }
-    }
-    return registered_type;
-};
-bool test_dev(unsigned int env) {
-    goopax_device d = goopax::default_device(static_cast<goopax::envmode>(env));
-    if (d.valid())
-        return true;
-    unsigned int log_env = env >> int(std::log2(env));
-    return false;
-}
-std::vector<goopax_device> test_env(unsigned int env) {
-    std::vector<goopax_device> dvec{};
-    if (test_dev(env))
-        dvec = goopax::devices(static_cast<goopax::envmode>(env));
-    return dvec;
-}
-
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d, const Py_ssize_t len) {
-    auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
-    std::fill(std::begin(shape), std::end(shape), 0);
-
-    if (d.max_registers() == 0) {
-        shape[3] = 1;
-    } else {
-        if (len % (d.max_registers() - queue_variables - user_variables) != 0) {
-            shape[3] = 1;
-        } else {
-            shape[3] = d.max_registers() - queue_variables - user_variables;
-        }
-    }
-
-    if (d.default_global_size_min() % d.default_local_size() != 0 || len / d.default_global_size_min() < 1) {
-        shape[0] = 1;
-    } else {
-        shape[0] = d.default_global_size_min() / d.default_local_size();
-    }
-
-    if (len / d.default_local_size() < 1) {
-        shape[1] = 1;
-    } else {
-        shape[1] = d.default_local_size();
-    }
-
-    if (len / shape[0] / shape[1] / shape[3] < 1) {
-        shape[2] = 1;
-    } else {
-        shape[2] = len / (shape[0] * shape[1] * shape[3]);
-    }
-
-    return shape;
-};
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> make_strides(const std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, const Py_ssize_t itemsize) {
-    auto strides = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
-    std::copy(begin(shape), end(shape), begin(strides));
-    Py_ssize_t previous_stridesize = itemsize;
-    std::for_each(std::rbegin(strides), std::rend(strides), [&previous_stridesize](auto& current){
-        if (current != 0) {
-            auto shape = current;
-            current = previous_stridesize;
-            previous_stridesize = shape * previous_stridesize;
-        }
-    });
-    return strides;
-};
+#include "gpu_reshaper.hpp"
 static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     PyObject* result = PyList_New(0);
     PyObject* ndarray = NULL;
