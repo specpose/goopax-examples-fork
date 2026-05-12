@@ -145,6 +145,16 @@ std::vector<goopax_device> test_env(unsigned int env) {
     return dvec;
 }
 
+unsigned long long lcm(unsigned long a, unsigned long b) {
+    unsigned long& larger = a > b ? a : b;
+    unsigned long& smaller = a < b ? a : b;
+    unsigned int n = 1;
+    while (n*smaller%larger!=0) {
+        ++n;
+    }
+    return n*smaller;
+}
+
 int main()
 {
     for (unsigned int log_env = 0; log_env < 10; ++log_env)
@@ -179,14 +189,27 @@ int main()
 
                 auto registered_type = register_types(d);
 
-                for (const auto& t : registered_type)
-                    cout << "\"" << type_to_python_name(t.first) << "\", ";
-                cout << endl;
+                unsigned int samplerate = 48000;
+                cout << "Assuming sample rate " << samplerate << endl;
 
-                auto shape = check_shape(d, 184320);//lcm(sizeof(samplesize)*lcm(global_size/local_size*local_size*usable_registers,samplerate),min_host_ptr_alignment)
-                auto strides = make_strides(shape, 8);
-                cout << shape << endl;
-                cout << strides << endl;
+                unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(1+queue_variables+user_variables),samplerate);//Intel CPU
+                if (d.max_registers()>=queue_variables+user_variables) {
+                    min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),samplerate);
+                }
+                cout << "Assuming minimal buffer length " << min_len << " symbols" << endl;
+
+                for (const auto& t : registered_type) {
+                    cout << "\"" << type_to_python_name(t.first) << "\":\n";
+                    auto shape = check_shape(d, min_len);
+                    cout << shape << endl;
+                    for (const auto& s : t.second) {
+                        auto strides = make_strides(shape, s.second);
+                        cout << strides << endl;
+                        cout << "Assuming minimal aligned buffer size " << lcm(s.second*min_len,d.min_host_ptr_alignment()) << " bytes" << endl;
+                    }
+                    cout << endl;
+                }
+
             }
         }
     }
