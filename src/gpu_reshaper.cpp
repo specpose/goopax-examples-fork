@@ -6,23 +6,36 @@ typedef short T;
 #include <functional>
 #include <goopax_extra/types.hpp>
 using namespace goopax;
-std::function<
-    void(void* buffer, std::array<Py_ssize_t, PyBUF_MAX_NDIM> strides, std::array<Py_ssize_t, PyBUF_MAX_NDIM> shape)>
-make_kernel_function(type_enum_t type)
-{
-    return [&type](void* buffer, std::array<Py_ssize_t, PyBUF_MAX_NDIM> strides, std::array<Py_ssize_t, PyBUF_MAX_NDIM> shape){
-    T* _buffer = (T*)buffer;
+static const Py_ssize_t queue_variables = 3;
+static const Py_ssize_t user_variables = 1;
+template<typename FUNC>
+class simd_kernel : kernel<FUNC>{
+};
+
+std::function<void(resource<T>&,gpu_int,gpu_int,gpu_int)> simd_function(goopax_device& d) {
+    unsigned int shape3 = d.max_registers();
+    return [&shape3](resource<T>& buffer, gpu_int shape0, gpu_int shape1, gpu_int shape2)->void{
+        gpu_for_group(0, shape0, [shape1,shape2,shape3](gpu_uint i){
+            gpu_for_local(0, shape1, [shape2,shape3](gpu_uint j){
+                gpu_for_local(0, shape2, [shape3](gpu_uint k){
+                for(unsigned int l = 0; l < shape3; ++l) {
+
+                }
+                });
+            });
+        });
+    };
+};
+    /*T* _buffer = (T*)buffer;
     for (Py_ssize_t i=0; i<shape[0]; ++i) {
         for (Py_ssize_t j=0; j<shape[1]; ++j) {
             for (Py_ssize_t k=0; k<shape[2]; ++k) {
-                for (Py_ssize_t l=0; l<shape[3]; ++l) {
+                for (Py_ssize_t l=0; l<(64-qv-uv); ++l) {
                     _buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]=_buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]*2;
                 }
             }
         }
-    }
-    };
-}
+    }*/
 
 #define PY_SSIZE_T_CLEAN
 #define Py_LIMITED_API
@@ -53,7 +66,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t l
 static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
     int log_env = 0;
     const char* gpu_uuid = NULL;
-    Py_ssize_t gpu_uuid_length;
+    Py_ssize_t gpu_uuid_length = 0;
     PyObject* mvobject = NULL;
 
     if (PyArg_ParseTuple(args, "iy#O", &log_env, &gpu_uuid, &gpu_uuid_length, &mvobject)) {
@@ -70,10 +83,12 @@ static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args)
                     abort();
                 Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
                 printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
-                auto func = make_kernel_function(type_enum<T>::value);
                 auto shape = safe_copy(view->shape, view->ndim);
                 auto strides = safe_copy(view->strides, view->ndim);
-                func(view->buf,strides,shape);
+                printf("%d, %d\n",sizeof(Py_ssize_t),sizeof(long));
+                printf("device min host ptr alignment: %d\n",dvec[device_i].min_host_ptr_alignment());
+                buffer<T> buffy(dvec[device_i], view->len, (T*)view->buf, BUFFER_READ_WRITE);
+                kernel<void(buffer<T>&,int,int,int)> process(dvec[device_i], simd_function(dvec[device_i]), shape[0]*shape[1], shape[1]);
                 //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
                 //    printf("%d,",((T*)view->buf)[i]);
                 //std::cout<< buffy << std::endl;
@@ -158,8 +173,7 @@ std::vector<goopax_device> test_env(unsigned int env) {
         dvec = goopax::devices(static_cast<goopax::envmode>(env));
     return dvec;
 }
-static Py_ssize_t queue_variables = 3;
-static Py_ssize_t user_variables = 1;
+
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d, const Py_ssize_t len) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::fill(std::begin(shape), std::end(shape), 0);

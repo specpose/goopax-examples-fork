@@ -9,7 +9,7 @@ CHUNK = 128
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 48000
-RECORD_SECONDS = 24
+RECORD_SECONDS = 48
 
 with wave.open('output.wav', 'wb') as wf:
     p = pyaudio.PyAudio()

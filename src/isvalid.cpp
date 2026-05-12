@@ -183,7 +183,7 @@ int main()
                     cout << "\"" << type_to_python_name(t.first) << "\", ";
                 cout << endl;
 
-                auto shape = check_shape(d, 92160);
+                auto shape = check_shape(d, 184320);//lcm(sizeof(samplesize)*lcm(global_size/local_size*local_size*usable_registers,samplerate),min_host_ptr_alignment)
                 auto strides = make_strides(shape, 8);
                 cout << shape << endl;
                 cout << strides << endl;
