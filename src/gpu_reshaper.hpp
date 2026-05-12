@@ -41,7 +41,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d, const Py_ss
 
     /*  Explicit Unrolling  */
     if (d.max_registers() == 0) {
-        shape[3] = 1;
+        shape[3] = queue_variables + user_variables;
     } else {
         if (len % (d.max_registers() - queue_variables - user_variables) != 0) {
             shape[3] = 1;
