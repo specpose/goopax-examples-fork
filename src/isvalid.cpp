@@ -34,8 +34,8 @@ std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
 
 int main()
 {
-    unsigned int samplerate = 48000;
-    cout << "Assuming sample rate " << samplerate << endl;
+    unsigned int bin_size = 48000;
+    cout << "Assuming bin size " << bin_size << endl;
     for (unsigned int log_env = 0; log_env < 10; ++log_env)
     {
         goopax::envmode env = static_cast<goopax::envmode>(1 << log_env);
@@ -67,9 +67,9 @@ int main()
 
                 auto registered_type = register_types(d);
 
-                unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(queue_variables+user_variables),samplerate);//Intel CPU
+                unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(queue_variables+user_variables),bin_size);//Intel CPU
                 if (d.max_registers()>=queue_variables+user_variables) {
-                    min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),samplerate);
+                    min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),bin_size);
                 }
                 cout << "Assuming minimal buffer length " << min_len << " symbols" << endl;
 

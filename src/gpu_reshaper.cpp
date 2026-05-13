@@ -8,9 +8,10 @@ typedef short T;
 using namespace goopax;
 static const Py_ssize_t queue_variables = 3;
 static const Py_ssize_t user_variables = 1;
-std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> simd_function(goopax_device& d) {
-    unsigned int shape3 = d.max_registers() - queue_variables - user_variables;
-    return [&shape3](resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2)->void{
+class simd_function : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> {
+    public:
+        simd_function(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)>{}, shape3(d.max_registers() - queue_variables - user_variables) {}
+    void operator()(resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2){
         gpu_for(0+global_id(),buffy.size(),[&buffy](gpu_uint i){
             buffy[i] = 0;
         });
@@ -27,6 +28,8 @@ std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> simd_function(goopa
             });
         });*/
     };
+    private:
+    unsigned int shape3;
 };
     /*T* _buffer = (T*)buffer;
     for (Py_ssize_t i=0; i<shape[0]; ++i) {
@@ -64,45 +67,7 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t l
         copy[i] = *(first + i);
     return copy;
 };
-#include <goopax_extra/output.hpp>
 static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
-    int log_env = 0;
-    const char* gpu_uuid = NULL;
-    Py_ssize_t gpu_uuid_length = 0;
-    PyObject* mvobject = NULL;
-
-    if (PyArg_ParseTuple(args, "iy#O", &log_env, &gpu_uuid, &gpu_uuid_length, &mvobject)) {
-        const Py_ssize_t d_uuid_length = std::tuple_size<std::array< uint8_t, 16 >>{};
-        if (gpu_uuid_length!=d_uuid_length)
-            abort();
-
-        envmode env = static_cast<envmode>(1 << log_env);
-        std::vector<goopax_device> dvec = devices(static_cast<goopax::envmode>(env));
-        for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
-            const std::array< uint8_t, d_uuid_length >& d_uuid= dvec[device_i].uuid();
-            if (memcmp(gpu_uuid, d_uuid.data(), d_uuid_length) == 0) {
-                if (PyMemoryView_Check(mvobject)!=1)
-                    abort();
-                Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
-                printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
-                auto shape = safe_copy(view->shape, view->ndim);
-                auto strides = safe_copy(view->strides, view->ndim);
-                printf("Device min host ptr alignment: %d\n",dvec[device_i].min_host_ptr_alignment());
-                std::size_t len = view->len / view->itemsize;
-                buffer<T> buffy(dvec[device_i], len, (T*)view->buf, BUFFER_READ_WRITE);
-                unsigned int shape0 = shape[0];
-                unsigned int shape1 = shape[1];
-                unsigned int shape2 = shape[2];
-                unsigned int shape3 = shape[3];
-                std::cout << "len " << len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << std::endl;
-                kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(dvec[device_i], simd_function(dvec[device_i]), shape1, shape0);
-                process(buffy,shape0,shape1,shape2);
-                //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
-                //    printf("%d,",((T*)view->buf)[i]);
-                //std::cout<< buffy << std::endl;
-            }
-        }
-    }
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -180,12 +145,124 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
     return result;
 }
 
+/*  Type    */
+typedef struct {
+    PyObject_VAR_HEAD
+    goopax_device* device;
+    simd_function* func;
+} SimdFunction;
+void SimdFunction_dealloc(PyObject* self) {
+    printf("Dealloc\n");
+    Py_TYPE(self)->tp_free(self);
+};
+template<typename FunctionClass> PyObject* SimdFunction_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds){
+    printf("New\n");
+    SimdFunction* obj = (SimdFunction*)subtype->tp_alloc(subtype, 0);
+    if (obj != NULL) {
+        obj->device = (goopax_device*)malloc(sizeof(goopax_device));
+    }
+    return (PyObject*)obj;
+};
+template<typename FunctionClass> void SimdFunction_free(void *self) {
+    printf("Free\n");
+    SimdFunction* obj = (SimdFunction*)self;
+    free((void*)obj->device);
+    free((void*)obj->func);
+};
+template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject* args, PyObject* kwds) {
+    printf("Init\n");
+    SimdFunction* _self = (SimdFunction*) self;
+    int log_env = 0;
+    const char* gpu_uuid = NULL;
+    Py_ssize_t gpu_uuid_length = 0;
+    if (PyArg_ParseTuple(args, "iy#", &log_env, &gpu_uuid, &gpu_uuid_length)) {
+        const Py_ssize_t d_uuid_length = std::tuple_size<std::array< uint8_t, 16 >>{};
+        if (gpu_uuid_length!=d_uuid_length)
+            abort();
+
+        envmode env = static_cast<envmode>(1 << log_env);
+        std::vector<goopax_device> dvec = devices(static_cast<goopax::envmode>(env));
+        for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
+            const std::array< uint8_t, d_uuid_length >& d_uuid= dvec[device_i].uuid();
+            if (memcmp(gpu_uuid, d_uuid.data(), d_uuid_length) == 0) {
+                printf("Init Success\n");
+                *(_self->device) = dvec[device_i];
+                _self->func = new simd_function(dvec[device_i]);
+                return 0;
+            }
+        }
+    }
+    _self->device = nullptr;
+    _self->func = nullptr;
+    return -1;
+};
+#include <goopax_extra/output.hpp>
+template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyObject *args, PyObject *kwargs) {
+    printf("Call\n");
+    SimdFunction* _self = (SimdFunction*) self;
+    PyObject* mvobject = NULL;
+
+    if (PyArg_ParseTuple(args, "O", &mvobject)) {
+        if (PyMemoryView_Check(mvobject)!=1)
+            abort();
+        Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
+        printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
+        auto shape = safe_copy(view->shape, view->ndim);
+        auto strides = safe_copy(view->strides, view->ndim);
+        printf("Device min host ptr alignment: %d\n",_self->device->min_host_ptr_alignment());
+        std::size_t len = view->len / view->itemsize;
+        unsigned int shape0 = shape[0];
+        unsigned int shape1 = shape[1];
+        unsigned int shape2 = shape[2];
+        unsigned int shape3 = shape[3];
+        std::cout << "len " << len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << std::endl;
+        buffer<T> buffy(*(_self->device), len, (T*)view->buf, BUFFER_READ_WRITE);
+        kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), *(_self->func));//, shape1, shape0);
+        process(buffy,shape0,shape1,shape2);
+        //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
+        //    printf("%d,",((T*)view->buf)[i]);
+        //std::cout<< buffy << std::endl;
+    }
+    Py_INCREF(Py_None);
+    return Py_None;
+};
+static const char SimdFunction_name[] = "simd_func";
+static const char SimdFunction_doc_string[] = "SIMD Function";
+PyTypeObject SimdFunction_Type(
+    PyObject* (*python_new_function)(PyTypeObject*, PyObject*, PyObject*),
+    int (*python_init_function)(PyObject*, PyObject*, PyObject*),
+    PyObject* (*python_call_function)(PyObject*, PyObject*, PyObject*),
+    void (*python_free_function)(void*)
+) {
+    PyTypeObject type = {
+    PyVarObject_HEAD_INIT(NULL, 0) // typing.Callable
+    SimdFunction_name,
+    sizeof(SimdFunction),
+    0,
+    (destructor)SimdFunction_dealloc,
+    0, 0, 0, 0, 0, 0, 0, 0, 0,
+    (ternaryfunc)python_call_function, // SimdFunction_call
+    0, 0, 0,
+    0,
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    PyDoc_STR(SimdFunction_doc_string),
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    (initproc)python_init_function,
+    PyType_GenericAlloc,
+    (newfunc)python_new_function,
+    (freefunc)python_free_function,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    };
+    return type;
+};
+
+
+/*  Module  */
 static PyMethodDef gpu_reshaper_methods[] = {
     {"process_memoryview", gpu_reshaper_process_memoryview, METH_VARARGS, ""},
     {"test_memoryview", gpu_reshaper_test_memoryview, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
-
 static struct PyModuleDef gpu_reshaper_module = {
     PyModuleDef_HEAD_INIT,
     "gpu_reshaper",
@@ -197,9 +274,12 @@ static struct PyModuleDef gpu_reshaper_module = {
     NULL,
     NULL
 };
-
 PyMODINIT_FUNC PyInit_gpu_reshaper(void){
-    return PyModule_Create(&gpu_reshaper_module);
+    PyObject* mod = PyModule_Create(&gpu_reshaper_module);
+    //PyTypeObject custom_type_descr = SimdFunction_Type(SimdFunction_init<simd_function>);
+    //if (PyModule_AddObjectRef(mod, "simd_function", (PyObject*)&custom_type_descr) < 0)
+    //    abort();
+    return mod;
 }
 
 #if !MODULE_LIBRARY
@@ -211,16 +291,16 @@ int main(){
     PyGILState_STATE gstate;
     gstate = PyGILState_Ensure();
 
-    PyObject* sys = PyImport_ImportModule("sys");
-    PyObject* path = PyObject_GetAttrString(sys,"path");
+    PyObject* sys_m = PyImport_ImportModule("sys");
+    PyObject* path = PyObject_GetAttrString(sys_m,"path");
     PyObject* append = PyObject_GetAttrString(path,"append");
     PyObject* append_args = PyTuple_New(1);
     PyObject* directory = PyUnicode_FromString("../python-modules");
     PyTuple_SetItem(append_args, 0, directory);
     PyObject_CallObject(append,append_args);
 
-    PyObject* numpy_test = PyImport_ImportModule("numpy_test");
-    PyObject* import_data = PyObject_GetAttrString(numpy_test,"import_data");
+    PyObject* numpy_test_m = PyImport_ImportModule("numpy_test");
+    PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_data");
     PyObject* import_data_args = PyTuple_New(1);
     PyObject* filename = PyUnicode_FromString(arg1);
     PyTuple_SetItem(import_data_args, 0, filename);
@@ -228,9 +308,9 @@ int main(){
     printf("Imported data from file \"%s\".\n", arg1);
     PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
 
-    PyObject* gpu_reshaper = PyImport_ImportModule("gpu_reshaper");
-    PyObject* process_call = PyObject_GetAttrString(gpu_reshaper,"process_memoryview");
-    PyObject* test = PyObject_GetAttrString(gpu_reshaper,"test_memoryview");
+    PyObject* gpu_reshaper_m = PyImport_ImportModule("gpu_reshaper");
+    PyObject* process_call = PyObject_GetAttrString(gpu_reshaper_m,"process_memoryview");
+    PyObject* test = PyObject_GetAttrString(gpu_reshaper_m,"test_memoryview");
     PyObject* test_args = PyTuple_New(1);
     PyTuple_SetItem(test_args, 0, numpy_array);
     PyObject* descriptor = PyObject_CallObject(test,test_args);
@@ -238,8 +318,8 @@ int main(){
     PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
     printf("\n");
     if (PyList_Size(descriptor)>0){
-        PyObject* ds = PyImport_ImportModule("device_selector");
-        PyObject* select = PyObject_GetAttrString(ds,"retrieve_shape");
+        PyObject* device_selector_m = PyImport_ImportModule("device_selector");
+        PyObject* select = PyObject_GetAttrString(device_selector_m,"retrieve_shape");
         PyObject* select_args = PyTuple_New(1);
         PyTuple_SetItem(select_args, 0, descriptor);
         PyObject* selection = PyObject_CallObject(select,select_args);
@@ -252,14 +332,23 @@ int main(){
         PyTuple_SetItem(shape_args, 0, shape);
         numpy_array = PyObject_CallObject(reshape, shape_args);
 
-        PyObject* process_args = PyTuple_New(3);
-        PyTuple_SetItem(process_args, 0, PyTuple_GetItem(selection, 0));
-        PyTuple_SetItem(process_args, 1, PyTuple_GetItem(selection, 1));
-        PyTuple_SetItem(process_args, 2, PyMemoryView_FromObject(numpy_array));
-        PyObject* result = PyObject_CallObject(process_call, process_args);
+        //PyObject* typing_m = PyImport_ImportModule("typing");
+        //PyObject* callable_t = PyObject_GetAttrString(typing_m,"Callable");
+        PyTypeObject custom_type_descr = SimdFunction_Type(SimdFunction_new<simd_function>,SimdFunction_init<simd_function>,SimdFunction_call<simd_function>,SimdFunction_free<simd_function>);
+        if (PyType_Ready(&custom_type_descr) < 0)
+            abort();
+        PyObject* Initialisation = PyTuple_New(2);
+        PyTuple_SetItem(Initialisation, 0, PyTuple_GetItem(selection, 0));
+        PyTuple_SetItem(Initialisation, 1, PyTuple_GetItem(selection, 1));
+        PyObject* Custom_Callable = PyObject_CallObject((PyObject*)&custom_type_descr, Initialisation);
+
+        PyObject* process_args = PyTuple_New(1);
+        PyTuple_SetItem(process_args, 0, PyMemoryView_FromObject(numpy_array));
+        PyObject* result = PyObject_CallObject(Custom_Callable, process_args);
+        PyObject_Del((void*)Custom_Callable);
 
         printf("Exporting data to file \"%s\".\n", arg1);
-        PyObject* export_data = PyObject_GetAttrString(numpy_test,"export_data");
+        PyObject* export_data = PyObject_GetAttrString(numpy_test_m,"export_data");
         PyObject* export_data_args = PyTuple_New(2);
         PyTuple_SetItem(export_data_args, 0, filename);
         PyTuple_SetItem(export_data_args, 1, numpy_array);
