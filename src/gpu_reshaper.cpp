@@ -31,6 +31,38 @@ class simd_function : public std::function<void(resource<T>&,gpu_uint,gpu_uint,g
     private:
     unsigned int _shape3;
 };
+
+/*struct simd_function {
+    unsigned int shape3;
+    static const unsigned int queue_variables = 3;
+    static const unsigned int user_variables = 1;
+    std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> afunc;
+};
+struct silence {
+    unsigned int shape3;
+    static const unsigned int queue_variables = 3;
+    static const unsigned int user_variables = 1;
+    std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> afunc = [&](resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2) {
+        //gpu_for(0+global_id(),buffy.size(),[&buffy](gpu_uint i){
+        //    buffy[i] = 0;
+        //});
+        //Does not work for GOOPAX_ENV=1
+        gpu_for(0+group_id()*shape1*shape2*shape3, num_groups()*shape1*shape2*shape3, shape1*shape2*shape3, [&buffy,shape1,shape2,shape3](gpu_uint i){
+            gpu_for(0+local_id()*shape2*shape3, local_size()*shape2*shape3, shape2*shape3, [&buffy,shape2,shape3](gpu_uint j){
+                gpu_for(j+shape3, shape2*shape3, shape3, [&buffy,shape3](gpu_uint k){
+                for(unsigned int l = 0; l < shape3; ++l) {
+                //gpu_for(k, shape3, 1, [&buffy](gpu_uint l) {
+                    buffy[l] = 0;
+                //});
+                }
+                });
+            });
+        });
+    };
+};*/
+
+
+
     /*T* _buffer = (T*)buffer;
     for (Py_ssize_t i=0; i<shape[0]; ++i) {
         for (Py_ssize_t j=0; j<shape[1]; ++j) {
@@ -67,10 +99,6 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t l
         copy[i] = *(first + i);
     return copy;
 };
-static PyObject* gpu_reshaper_process_memoryview(PyObject* self, PyObject* args){
-    Py_INCREF(Py_None);
-    return Py_None;
-}
 
 #include <algorithm>
 #include <array>
@@ -142,32 +170,33 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
 }
 
 /*  Type    */
-typedef struct {
+template<typename FunctionClass> struct SimdFunction{
     PyObject_VAR_HEAD
     goopax_device* device;
-    simd_function* func;
-} SimdFunction;
+    FunctionClass* func;
+};
 void SimdFunction_dealloc(PyObject* self) {
     printf("Dealloc\n");
     Py_TYPE(self)->tp_free(self);
 };
 template<typename FunctionClass> PyObject* SimdFunction_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds){
     printf("New\n");
-    SimdFunction* obj = (SimdFunction*)subtype->tp_alloc(subtype, 0);
+    SimdFunction<FunctionClass>* obj = (SimdFunction<FunctionClass>*)subtype->tp_alloc(subtype, 0);
     if (obj != NULL) {
         obj->device = (goopax_device*)malloc(sizeof(goopax_device));
+        //obj->func = (FunctionClass*)malloc(sizeof(FunctionClass));
     }
     return (PyObject*)obj;
 };
 template<typename FunctionClass> void SimdFunction_free(void *self) {
     printf("Free\n");
-    SimdFunction* obj = (SimdFunction*)self;
+    SimdFunction<FunctionClass>* obj = (SimdFunction<FunctionClass>*)self;
     free((void*)obj->device);
     free((void*)obj->func);
 };
 template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject* args, PyObject* kwds) {
     printf("Init\n");
-    SimdFunction* _self = (SimdFunction*) self;
+    SimdFunction<FunctionClass>* _self = (SimdFunction<FunctionClass>*) self;
     int log_env = 0;
     const char* gpu_uuid = NULL;
     Py_ssize_t gpu_uuid_length = 0;
@@ -181,9 +210,9 @@ template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject*
         for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
             const std::array< uint8_t, d_uuid_length >& d_uuid= dvec[device_i].uuid();
             if (memcmp(gpu_uuid, d_uuid.data(), d_uuid_length) == 0) {
-                printf("Init Success\n");
                 *(_self->device) = dvec[device_i];
-                _self->func = new simd_function(dvec[device_i]);
+                _self->func = new FunctionClass(dvec[device_i]);
+                printf("Init Success\n");
                 return 0;
             }
         }
@@ -195,7 +224,7 @@ template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject*
 #include <goopax_extra/output.hpp>
 template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyObject *args, PyObject *kwargs) {
     printf("Call\n");
-    SimdFunction* _self = (SimdFunction*) self;
+    SimdFunction<FunctionClass>* _self = (SimdFunction<FunctionClass>*) self;
     PyObject* mvobject = NULL;
 
     if (PyArg_ParseTuple(args, "O", &mvobject)) {
@@ -232,6 +261,7 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
 static const char SimdFunction_name[] = "simd_func";
 static const char SimdFunction_doc_string[] = "SIMD Function";
 PyTypeObject SimdFunction_Type(
+    Py_ssize_t basic_size,
     PyObject* (*python_new_function)(PyTypeObject*, PyObject*, PyObject*),
     int (*python_init_function)(PyObject*, PyObject*, PyObject*),
     PyObject* (*python_call_function)(PyObject*, PyObject*, PyObject*),
@@ -240,7 +270,7 @@ PyTypeObject SimdFunction_Type(
     PyTypeObject type = {
     PyVarObject_HEAD_INIT(NULL, 0) // typing.Callable
     SimdFunction_name,
-    sizeof(SimdFunction),
+    basic_size,
     0,
     (destructor)SimdFunction_dealloc,
     0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -262,7 +292,6 @@ PyTypeObject SimdFunction_Type(
 
 /*  Module  */
 static PyMethodDef gpu_reshaper_methods[] = {
-    {"process_memoryview", gpu_reshaper_process_memoryview, METH_VARARGS, ""},
     {"test_memoryview", gpu_reshaper_test_memoryview, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
@@ -279,8 +308,8 @@ static struct PyModuleDef gpu_reshaper_module = {
 };
 PyMODINIT_FUNC PyInit_gpu_reshaper(void){
     PyObject* mod = PyModule_Create(&gpu_reshaper_module);
-    //PyTypeObject custom_type_descr = SimdFunction_Type(SimdFunction_init<simd_function>);
-    //if (PyModule_AddObjectRef(mod, "simd_function", (PyObject*)&custom_type_descr) < 0)
+    //PyTypeObject custom_type_descr = SimdFunction_Type(SimdFunction_init<silence>);
+    //if (PyModule_AddObjectRef(mod, "silence", (PyObject*)&custom_type_descr) < 0)
     //    abort();
     return mod;
 }
@@ -312,7 +341,6 @@ int main(){
     PyObject_Print(wav_format,stdout,Py_PRINT_RAW);
 
     PyObject* gpu_reshaper_m = PyImport_ImportModule("gpu_reshaper");
-    PyObject* process_call = PyObject_GetAttrString(gpu_reshaper_m,"process_memoryview");
     PyObject* test = PyObject_GetAttrString(gpu_reshaper_m,"test_memoryview");
     PyObject* descriptor = PyObject_CallObject(test,wav_format);
     printf("Dumping memoryview descriptor:\n");
@@ -346,7 +374,7 @@ int main(){
 
         //PyObject* typing_m = PyImport_ImportModule("typing");
         //PyObject* callable_t = PyObject_GetAttrString(typing_m,"Callable");
-        PyTypeObject custom_type_descr = SimdFunction_Type(SimdFunction_new<simd_function>,SimdFunction_init<simd_function>,SimdFunction_call<simd_function>,SimdFunction_free<simd_function>);
+        PyTypeObject custom_type_descr = SimdFunction_Type(sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
         if (PyType_Ready(&custom_type_descr) < 0)
             abort();
         PyObject* Initialisation = PyTuple_New(2);
