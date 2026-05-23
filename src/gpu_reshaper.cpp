@@ -86,12 +86,11 @@ PyObject* convert_descriptor_item(T& arr) {
     }
     return result;
 }
-static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& strides){
-    PyObject* result = PyTuple_New(3);
+static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape){
+    PyObject* result = PyTuple_New(2);
     PyObject* f = PyUnicode_FromString(format.c_str());
     PyTuple_SetItem(result, 0, f);
     PyTuple_SetItem(result, 1, convert_descriptor_item(shape));
-    PyTuple_SetItem(result, 2, convert_descriptor_item(strides));
     return result;
 }
 
@@ -126,7 +125,7 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
                         //std::cout << gpu_shape << std::endl;
                         auto gpu_strides = make_strides(gpu_shape, view.itemsize);
                         //std::cout << gpu_strides << std::endl;
-                        PyObject* descr = memoryview_descriptor(self, std::string(view.format),gpu_shape,gpu_strides);
+                        PyObject* descr = memoryview_descriptor(self, std::string(view.format),gpu_shape);
                         PyTuple_SetItem(Device, 1, descr);
                         PyList_Append(Devices, Device);
                     }

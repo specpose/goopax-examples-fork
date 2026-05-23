@@ -69,21 +69,23 @@ int main()
 
                 auto registered_type = register_types(d);
 
-                unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(queue_variables+user_variables),bin_size);//Intel CPU
-                if (d.max_registers()>=queue_variables+user_variables) {
-                    min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),bin_size);
-                }
-                cout << "Assuming minimal buffer length " << min_len << " symbols" << endl;
-
                 for (const auto& t : registered_type) {
                     cout << "\"" << type_to_python_name(t.first) << "\":\n";
-                    auto shape = check_shape(d, min_len);
-                    cout << shape << endl;
                     for (const auto& s : t.second) {
                         const auto _itemsize = itemsize(s.first);
+                        unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(queue_variables+user_variables)*_itemsize,d.min_host_ptr_alignment());//Intel CPU
+                        if (d.max_registers()>=queue_variables+user_variables) {
+                            min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables)*_itemsize,d.min_host_ptr_alignment());
+                        }
+                        cout << "Assuming minimal aligned buffer size " << min_len << " bytes" << endl;
+                        auto shape = check_shape(d, min_len);
+                        cout << shape << endl;
                         auto strides = make_strides(shape, _itemsize);
                         cout << strides << endl;
-                        cout << "Assuming minimal aligned buffer size " << lcm(_itemsize*min_len,d.min_host_ptr_alignment()) << " bytes" << endl;
+                        auto new_bin_size = lcm(shape[2]*shape[3],bin_size);
+                        cout << "Assuming minimal bin length " << new_bin_size << " symbols, actual bin length " << shape[2]*shape[3] << " symbols" << endl;
+                        auto queue_factor = new_bin_size/(shape[2]*shape[3]);
+                        cout << "Adjusted minimal queue length " << queue_factor*shape[2] << " symbols, actual queue length " << shape[2] << " symbols" << endl;
                     }
                     cout << endl;
                 }
