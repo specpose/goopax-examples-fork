@@ -20,22 +20,22 @@ std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
 
 /*  Goopax  */
 bool test_dev(unsigned int env) {
-    goopax_device d = goopax::default_device(static_cast<goopax::envmode>(env));
+    goopax::goopax_device d = goopax::default_device(static_cast<goopax::envmode>(env));
     if (d.valid())
         return true;
     unsigned int log_env = env >> int(std::log2(env));
     //throw std::runtime_error("Default Device in ENV "+std::to_string(env)+" ("+backend_names[log_env]+")"+" not valid.");
     return false;
 }
-std::vector<goopax_device> test_env(unsigned int env) {
-    std::vector<goopax_device> dvec{};
+std::vector<goopax::goopax_device> test_env(unsigned int env) {
+    std::vector<goopax::goopax_device> dvec{};
     if (test_dev(env))
         dvec = goopax::devices(static_cast<goopax::envmode>(env));
     return dvec;
 }
 
 /*  Logic   */
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax_device& d, const Py_ssize_t len) {
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax::goopax_device& d, const Py_ssize_t len) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::fill(std::begin(shape), std::end(shape), 0);
 
@@ -101,17 +101,31 @@ unsigned long long lcm(unsigned long a, unsigned long b) {
 }
 
 /*  Python  */
+Py_ssize_t itemsize(std::string format){
+    PyObject* struct_m = PyImport_ImportModule("struct");
+    PyObject* calcsize = PyObject_GetAttrString(struct_m,"calcsize");
+    PyObject* calcsize_args = PyTuple_New(1);
+    char _python_format[2] = "";
+    strcpy(_python_format,format.c_str());
+    PyTuple_SetItem(calcsize_args, 0, PyUnicode_FromString(_python_format));
+    PyObject* itemsize = (PyObject*)PyObject_CallObject(calcsize, calcsize_args);
+    if (PyNumber_Check(itemsize)!=1)
+        abort();
+    return PyNumber_AsSsize_t(itemsize,NULL);
+}
 static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal", "Vulkan" };
-std::string type_to_python_name(type_enum_t type) { return type_enum_raw_names[type / num_type_modes]; };
-static std::map<type_enum_t, std::map<std::string, Py_ssize_t>> known_types {
-    {type_enum<double>::value, { {std::string("d"),8} }},
-    {type_enum<int16_t>::value, { {std::string("h"),2} }}
+std::string type_to_python_name(goopax::type_enum_t type) { return goopax::type_enum_raw_names[type / goopax::num_type_modes]; };
+/*  https://docs.python.org/3/library/struct.html#format-characters */
+/*  https://numpy.org/doc/stable/reference/arrays.interface.html#arrays-interface   */
+static std::map<goopax::type_enum_t, std::map<std::string, std::string>> known_types {
+    {goopax::type_enum<double>::value, { {std::string("d"),std::string("f")} }},
+    {goopax::type_enum<int16_t>::value, { {std::string("h"),std::string("i")} }}
 };
-const std::map<type_enum_t, std::map<std::string, Py_ssize_t>> register_types(goopax_device& d) {
-    std::map<type_enum_t, std::map<std::string, Py_ssize_t>> registered_type{};
-    for (unsigned int t = 0; t < std::size(type_enum_raw_names); ++t)
+const std::map<goopax::type_enum_t, std::map<std::string, std::string>> register_types(goopax::goopax_device& d) {
+    std::map<goopax::type_enum_t, std::map<std::string, std::string>> registered_type{};
+    for (unsigned int t = 0; t < std::size(goopax::type_enum_raw_names); ++t)
     {
-        const auto enumerated_type = static_cast<type_enum_t>(t * num_type_modes);
+        const auto enumerated_type = static_cast<goopax::type_enum_t>(t * goopax::num_type_modes);
         if (d.support_type(enumerated_type))
         {
             if (known_types.find(enumerated_type) != end(known_types))

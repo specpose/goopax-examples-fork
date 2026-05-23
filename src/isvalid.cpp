@@ -6,16 +6,15 @@
 #include <goopax>
 #include <goopax_extra/output.hpp>
 #include <goopax_extra/types.hpp>
-#include <iomanip>
 #include <Python.h>
+static Py_ssize_t queue_variables = 3;
+static Py_ssize_t user_variables = 1;
+#include "gpu_reshaper.hpp"
 
 using namespace goopax;
 using namespace std;
 
-static Py_ssize_t queue_variables = 3;
-static Py_ssize_t user_variables = 1;
 #include <map>
-#include "gpu_reshaper.hpp"
 namespace std
 {
 std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
@@ -32,8 +31,11 @@ std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
 }
 }
 
+#include <iomanip>
 int main()
 {
+    Py_InitializeEx(0);
+
     unsigned int bin_size = 48000;
     cout << "Assuming bin size " << bin_size << endl;
     for (unsigned int log_env = 0; log_env < 10; ++log_env)
@@ -78,9 +80,10 @@ int main()
                     auto shape = check_shape(d, min_len);
                     cout << shape << endl;
                     for (const auto& s : t.second) {
-                        auto strides = make_strides(shape, s.second);
+                        const auto _itemsize = itemsize(s.first);
+                        auto strides = make_strides(shape, _itemsize);
                         cout << strides << endl;
-                        cout << "Assuming minimal aligned buffer size " << lcm(s.second*min_len,d.min_host_ptr_alignment()) << " bytes" << endl;
+                        cout << "Assuming minimal aligned buffer size " << lcm(_itemsize*min_len,d.min_host_ptr_alignment()) << " bytes" << endl;
                     }
                     cout << endl;
                 }
@@ -88,4 +91,11 @@ int main()
             }
         }
     }
+#if DEBUG
+    if (Py_FinalizeEx() < 0)
+        abort();
+#else
+    Py_Finalize();
+#endif
+
 }

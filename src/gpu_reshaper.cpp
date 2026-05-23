@@ -116,7 +116,7 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
                     auto registered_type = register_types(dvec[device_i]);
                     for (const auto& dev_ts : registered_type){
                     for (const auto& t : dev_ts.second){
-                    if (t.first == view.format && t.second == view.itemsize) {
+                    if (t.first == view.format && itemsize(t.first) == view.itemsize) {
                         PyObject* Device = PyTuple_New(2);
                         const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
                         PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
