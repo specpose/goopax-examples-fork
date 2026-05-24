@@ -113,6 +113,21 @@ Py_ssize_t itemsize(std::string format){
         abort();
     return PyNumber_AsSsize_t(itemsize,NULL);
 }
+Py_ssize_t ndim(Py_ssize_t * shape) {
+    Py_ssize_t ndim = 0;
+    for (std::size_t i = 0; i <PyBUF_MAX_NDIM; ++i)
+        if (!shape[i]==0)
+            ++ndim;
+        else
+            break;
+    return ndim;
+};
+Py_ssize_t len(Py_ssize_t itemsize, Py_ssize_t * shape) {
+    auto len = itemsize;
+    for (Py_ssize_t i = 0; i<ndim(shape); ++i)
+        len *= shape[i];
+    return len;
+}
 static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal", "Vulkan" };
 std::string type_to_python_name(goopax::type_enum_t type) { return goopax::type_enum_raw_names[type / goopax::num_type_modes]; };
 /*  https://docs.python.org/3/library/struct.html#format-characters */
