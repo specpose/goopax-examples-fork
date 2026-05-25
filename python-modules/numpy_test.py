@@ -25,15 +25,38 @@ def import_header(filename):
     f.close()
     return result
 
-def import_data(filename):
+def import_wav(filename):
     header = import_header(filename)
     f = open(filename, 'r')
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
     dt = numpy.dtype('i'+str(int(header["bits_per_sample"][0]/8)))
-    #print(dt.isbuiltin)
-    #print(dt.char)
     result = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
+    f.close()
+    return result
+
+def import_wav_aligned(filename):
+    header = import_header(filename)
+    f = open(filename, 'rb')
+    if (header["audio_fmt"][0] != 1):
+        raise Exception("Not PCM Integer")
+    if not (header["data_size"][0] % 4096 == 0):
+        raise Exception("WAV File contents minus header size 44 bytes is not suitable for alligned_alloc")
+    import gpu_buffer
+    from gpu_buffer import CustomBuffer
+    buffy = CustomBuffer('h', (48, 16, 100, 60), 4096)
+
+    dt = numpy.dtype('i'+str(int(header["bits_per_sample"][0]/8)))
+    bview = memoryview(buffy)
+    #print(len(buffy))
+    result = numpy.frombuffer(bview, dtype=dt)
+    #result = numpy.frombuffer(bview, dtype=dt, count=header["data_size"][0])
+    #f.read(44)
+    #rview = memoryview(result)
+    #if not (f.readinto(rview) == header["data_size"][0]):
+    #    raise Exception("Could not read file into numpy array")
+    #release(rview)
+    #release(bview)
     f.close()
     return result
 

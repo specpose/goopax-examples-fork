@@ -300,7 +300,7 @@ int main(){
     PyObject_CallObject(append,append_args);
 
     PyObject* numpy_test_m = PyImport_ImportModule("numpy_test");
-    PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_data");
+    PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_wav_aligned");
     PyObject* import_data_args = PyTuple_New(1);
     PyObject* filename = PyUnicode_FromString(arg1);
     PyTuple_SetItem(import_data_args, 0, filename);
