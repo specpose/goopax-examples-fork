@@ -25,21 +25,29 @@ def import_header(filename):
     f.close()
     return result
 
-def import_wav(filename):
+def wav_format(filename):
     header = import_header(filename)
     f = open(filename, 'r')
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
+    f.close()
+    return ('h',int(header["data_size"][0]/(header["bits_per_sample"][0]/8)))
+
+def import_wav(filename, wav_format):
+    header = import_header(filename)
+    f = open(filename, 'r')
+    if (header["audio_fmt"][0] == 1 and wav_format[0] != 'h'):
+        raise Exception("Only short int is accepted")
     dt = numpy.dtype('i'+str(int(header["bits_per_sample"][0]/8)))
     result = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
     f.close()
     return result
 
-def import_wav_aligned(filename):
+def import_wav_aligned(filename, wav_format):
     header = import_header(filename)
     f = open(filename, 'rb')
-    if (header["audio_fmt"][0] != 1):
-        raise Exception("Not PCM Integer")
+    if (header["audio_fmt"][0] == 1 and wav_format[0] != 'h'):
+        raise Exception("Only short int is accepted")
     if not (header["data_size"][0] % 4096 == 0):
         raise Exception("WAV File contents minus header size 44 bytes is not suitable for alligned_alloc")
     import gpu_buffer
