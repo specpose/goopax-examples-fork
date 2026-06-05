@@ -12,7 +12,6 @@ class simd_function : public std::function<void(resource<T>&,gpu_uint,gpu_uint,g
     public:
         simd_function(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
     void operator()(resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2, gpu_uint shape3){
-        //gpu_for(0+global_id(),buffy.size(),[&buffy](gpu_uint i){
         gpu_for(0+global_id(), shape0*shape1*shape2*shape3,[&buffy](gpu_uint i){
             buffy[i] = 0;
         });
@@ -121,7 +120,7 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
                         PyObject* Device = PyTuple_New(2);
                         const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
                         PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
-                        auto gpu_shape = check_shape(dvec[device_i], length);
+                        auto gpu_shape = check_shape(dvec[device_i], length / itemsize(format));
                         //std::cout << gpu_shape << std::endl;
                         auto gpu_strides = make_strides(gpu_shape, itemsize(format));
                         //std::cout << gpu_strides << std::endl;
@@ -214,7 +213,7 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         std::size_t device_alignment = _self->device->min_host_ptr_alignment();
         printf("Device min host ptr alignment: %d\n", device_alignment);
         std::size_t padding = view->len % device_alignment == 0 ? 0 : device_alignment - (view->len % device_alignment);
-        std::cout << "padding " << padding << " len " << len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << std::endl;
+        std::cout << "padding " << padding << " len " << len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
         buffer<T> buffy(*(_self->device), len + (padding/view->itemsize), (T*)view->buf, BUFFER_READ_WRITE);
         kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int, unsigned int)> process(*(_self->device), *(_self->func));//, shape1, shape0);
         process(buffy,shape0,shape1,shape2,shape3);
@@ -310,15 +309,12 @@ int main(){
     PyObject* gpu_reshaper_m = PyImport_ImportModule("gpu_reshaper");
     PyObject* process_call = PyObject_GetAttrString(gpu_reshaper_m,"process_memoryview");
     PyObject* test = PyObject_GetAttrString(gpu_reshaper_m,"test_memoryview");
-    PyObject* test_args = PyTuple_New(2);
-    PyTuple_SetItem(test_args, 0, PyUnicode_FromString("h"));
-    PyTuple_SetItem(test_args, 1, PyLong_FromLong(4608000));
-    PyObject* descriptor = PyObject_CallObject(test,test_args);
+    PyObject* descriptor = PyObject_CallObject(test,wav_format);
     printf("Dumping memoryview descriptor:\n");
     PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
     printf("\n");
 
-    PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_wav");
+    PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_wav_aligned");
     PyObject* import_data_args = PyTuple_New(2);
     PyTuple_SetItem(import_data_args, 0, filename);
     PyTuple_SetItem(import_data_args, 1, wav_format);
