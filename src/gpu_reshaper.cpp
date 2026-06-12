@@ -201,7 +201,10 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
     if (PyArg_ParseTuple(args, "O", &mvobject)) {
         if (PyMemoryView_Check(mvobject)!=1)
             abort();
-        Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
+        //Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
+        PyObject* obj = PyMemoryView_GET_BASE(mvobject);
+        Py_buffer* view;
+        if (PyObject_GetBuffer(obj, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
         auto shape = safe_copy(view->shape, view->ndim);
         auto strides = safe_copy(view->strides, view->ndim);
@@ -220,6 +223,8 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
         //    printf("%d,",((T*)view->buf)[i]);
         //std::cout<< buffy << std::endl;
+        PyBuffer_Release(view);
+        }
     }
     Py_INCREF(Py_None);
     return Py_None;
