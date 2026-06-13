@@ -335,15 +335,14 @@ int main(){
         PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
         printf("Imported data from file \"%s\".\n", arg1);
 
-        /*
-        PyObject* shape = PyTuple_GetItem(selection, 2);
-        PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
-        printf("Python ndarray reshaping to:\n");
-        PyObject_Print(shape,stdout,Py_PRINT_RAW);
-        printf("\n");
-        PyObject* shape_args = PyTuple_New(1);
-        PyTuple_SetItem(shape_args, 0, shape);
-        numpy_array = PyObject_CallObject(reshape, shape_args);*/
+        //PyObject* shape = PyTuple_GetItem(selection, 2);
+        //PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
+        //printf("Python ndarray reshaping to:\n");
+        //PyObject_Print(shape,stdout,Py_PRINT_RAW);
+        //printf("\n");
+        //PyObject* shape_args = PyTuple_New(1);
+        //PyTuple_SetItem(shape_args, 0, shape);
+        //numpy_array = PyObject_CallObject(reshape, shape_args);
 
         //PyObject* typing_m = PyImport_ImportModule("typing");
         //PyObject* callable_t = PyObject_GetAttrString(typing_m,"Callable");
