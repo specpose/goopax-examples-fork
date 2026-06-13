@@ -46,11 +46,11 @@ struct silence {
     static const unsigned int queue_variables = 3;
     static const unsigned int user_variables = 1;
     std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> afunc = [&](resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2) {
-        gpu_for(0+global_id(), shape0*shape1*shape2*_shape3,[&buffy](gpu_uint i){
-            buffy[i] = 0;
-        });
+        //gpu_for(0+global_id(), shape0*shape1*shape2*_shape3,[&buffy](gpu_uint i){
+        //    buffy[i] = 0;
+        //});
         //Does not work for GOOPAX_ENV=1
-        /*gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
+        gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
             gpu_for(0+local_id()*shape2*_shape3, local_size()*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
                 gpu_for(j+_shape3, shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
                 for(unsigned int l = 0; l < _shape3; ++l) {
@@ -60,7 +60,7 @@ struct silence {
                 }
                 });
             });
-        });*/
+        });
     };
 };
 
