@@ -202,9 +202,9 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         if (PyMemoryView_Check(mvobject)!=1)
             abort();
         //Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
-        PyObject* obj = PyMemoryView_GET_BASE(mvobject);
-        Py_buffer* view;
-        if (PyObject_GetBuffer(obj, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
+        //PyObject* obj = PyMemoryView_GET_BASE(mvobject);
+        Py_buffer* view = new Py_buffer;
+        if (PyObject_GetBuffer(mvobject, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
         auto shape = safe_copy(view->shape, view->ndim);
         auto strides = safe_copy(view->strides, view->ndim);
@@ -325,7 +325,6 @@ int main(){
     PyTuple_SetItem(import_data_args, 1, wav_format);
     PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
     printf("Imported data from file \"%s\".\n", arg1);
-    PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
 
     if (PyList_Size(descriptor)>0){
         PyObject* device_selector_m = PyImport_ImportModule("device_selector");
@@ -335,12 +334,13 @@ int main(){
         PyObject* selection = PyObject_CallObject(select,select_args);
         PyObject* shape = PyTuple_GetItem(selection, 2);
 
+        /*PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
         printf("Python ndarray reshaping to:\n");
         PyObject_Print(shape,stdout,Py_PRINT_RAW);
         printf("\n");
         PyObject* shape_args = PyTuple_New(1);
         PyTuple_SetItem(shape_args, 0, shape);
-        numpy_array = PyObject_CallObject(reshape, shape_args);
+        numpy_array = PyObject_CallObject(reshape, shape_args);*/
 
         //PyObject* typing_m = PyImport_ImportModule("typing");
         //PyObject* callable_t = PyObject_GetAttrString(typing_m,"Callable");
@@ -352,10 +352,17 @@ int main(){
         PyTuple_SetItem(Initialisation, 1, PyTuple_GetItem(selection, 1));
         PyObject* Custom_Callable = PyObject_CallObject((PyObject*)&custom_type_descr, Initialisation);
 
+        //Py_buffer* view;
+        //if (PyObject_GetBuffer(numpy_array, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         PyObject* process_args = PyTuple_New(1);
-        PyTuple_SetItem(process_args, 0, PyMemoryView_FromObject(numpy_array));
+        PyObject* mv = PyMemoryView_GetContiguous(numpy_array, PyBUF_WRITE, 'C');
+        //PyObject* mv = PyMemoryView_FromObject(numpy_array);
+        //PyObject* mv = PyMemoryView_FromBuffer(view);
+        PyTuple_SetItem(process_args, 0, mv);
         PyObject* result = PyObject_CallObject(Custom_Callable, process_args);
         PyObject_Del((void*)Custom_Callable);
+        //PyBuffer_Release(view);
+        //}
 
         printf("Exporting data to file \"%s\".\n", arg1);
         PyObject* export_data = PyObject_GetAttrString(numpy_test_m,"export_data");

@@ -55,24 +55,26 @@ def import_wav_aligned(filename, wav_format):
     #buffy = CustomBuffer('h', (1, 8, 144000, 4), 4)
     buffy = CustomBuffer('h', (48, 16, 100, 60), 4096)
 
-    n_bytes = str(int(header["bits_per_sample"][0]/8))
-    dt = numpy.dtype('i'+n_bytes)
-    bview = memoryview(buffy)
+    #n_bytes = str(int(header["bits_per_sample"][0]/8))
+    #dt = numpy.dtype('i'+n_bytes)
+    #bview = memoryview(buffy)
     #print(len(buffy))
     #result = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
     #print(int(header["data_size"][0]/(header["bits_per_sample"][0]/8)))
-    result = numpy.frombuffer(bview, dtype=dt)
+    #result = numpy.frombuffer(bview, dtype=dt)
     #result = numpy.frombuffer(bview, dtype=dt, count=4608000)
     #result = numpy.frombuffer(bview, dtype=dt, count=int(header["data_size"][0]/(header["bits_per_sample"][0]/8)))
     #result = numpy.frombuffer(bview, dtype=dt, count=int(header["data_size"][0]/(header["bits_per_sample"][0]/8)), like=array_like)
+    #print(result.flags)
     #f.read(44)
-    rview = memoryview(result)
+    #rview = memoryview(result)
     #if not (f.readinto(rview) == header["data_size"][0]):
     #    raise Exception("Could not read file into numpy array")
-    rview.release()
-    bview.release()
+    #rview.release()
+    #bview.release()
     f.close()
-    return result
+    print("Before passing")
+    return buffy
 
 def export_data(filename, arr):
     header = import_header(filename)
@@ -80,7 +82,10 @@ def export_data(filename, arr):
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
     f.seek(44)
-    f.write(arr.tobytes())
+    n_bytes = str(int(header["bits_per_sample"][0]/8))
+    dt = numpy.dtype('i'+n_bytes)
+    np_arr = numpy.frombuffer(arr, dtype=dt)
+    f.write(np_arr.tobytes())
     f.close()
 
 import sys
