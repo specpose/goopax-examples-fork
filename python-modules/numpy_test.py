@@ -48,8 +48,6 @@ def import_wav_aligned(filename, wav_format, shape):
     f = open(filename, 'rb')
     if (header["audio_fmt"][0] == 1 and wav_format[0] != 'h'):
         raise Exception("Only short int is accepted")
-    if not (header["data_size"][0] % 4096 == 0):
-        raise Exception("WAV File contents minus header size 44 bytes is not suitable for alligned_alloc")
     import gpu_buffer
     from gpu_buffer import CustomBuffer
     buffy = CustomBuffer(wav_format[0], shape[2], shape[3])

@@ -36,7 +36,7 @@ int main()
 {
     Py_InitializeEx(0);
 
-    unsigned int bin_size = 48000;
+    unsigned int bin_size = 2400;//48000
     cout << "Assuming bin size " << bin_size << endl;
     for (unsigned int log_env = 0; log_env < 10; ++log_env)
     {
