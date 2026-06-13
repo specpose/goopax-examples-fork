@@ -43,7 +43,7 @@ def import_wav(filename, wav_format):
     f.close()
     return result
 
-def import_wav_aligned(filename, wav_format):
+def import_wav_aligned(filename, wav_format, shape):
     header = import_header(filename)
     f = open(filename, 'rb')
     if (header["audio_fmt"][0] == 1 and wav_format[0] != 'h'):
@@ -52,20 +52,16 @@ def import_wav_aligned(filename, wav_format):
         raise Exception("WAV File contents minus header size 44 bytes is not suitable for alligned_alloc")
     import gpu_buffer
     from gpu_buffer import CustomBuffer
-    #buffy = CustomBuffer('h', (1, 8, 144000, 4), 4)
-    buffy = CustomBuffer('h', (48, 16, 100, 60), 4096)
+    buffy = CustomBuffer(wav_format[0], shape[2], shape[3])
 
     #n_bytes = str(int(header["bits_per_sample"][0]/8))
     #dt = numpy.dtype('i'+n_bytes)
     #bview = memoryview(buffy)
-    #print(len(buffy))
     #result = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
-    #print(int(header["data_size"][0]/(header["bits_per_sample"][0]/8)))
     #result = numpy.frombuffer(bview, dtype=dt)
     #result = numpy.frombuffer(bview, dtype=dt, count=4608000)
     #result = numpy.frombuffer(bview, dtype=dt, count=int(header["data_size"][0]/(header["bits_per_sample"][0]/8)))
     #result = numpy.frombuffer(bview, dtype=dt, count=int(header["data_size"][0]/(header["bits_per_sample"][0]/8)), like=array_like)
-    #print(result.flags)
     #f.read(44)
     #rview = memoryview(result)
     #if not (f.readinto(rview) == header["data_size"][0]):
@@ -73,7 +69,6 @@ def import_wav_aligned(filename, wav_format):
     #rview.release()
     #bview.release()
     f.close()
-    print("Before passing")
     return buffy
 
 def export_data(filename, arr):

@@ -319,22 +319,25 @@ int main(){
     PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
     printf("\n");
 
-    PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_wav_aligned");
-    PyObject* import_data_args = PyTuple_New(2);
-    PyTuple_SetItem(import_data_args, 0, filename);
-    PyTuple_SetItem(import_data_args, 1, wav_format);
-    PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
-    printf("Imported data from file \"%s\".\n", arg1);
-
     if (PyList_Size(descriptor)>0){
         PyObject* device_selector_m = PyImport_ImportModule("device_selector");
         PyObject* select = PyObject_GetAttrString(device_selector_m,"retrieve_shape");
         PyObject* select_args = PyTuple_New(1);
         PyTuple_SetItem(select_args, 0, descriptor);
         PyObject* selection = PyObject_CallObject(select,select_args);
-        PyObject* shape = PyTuple_GetItem(selection, 2);
+        PyObject_Print(selection,stdout,Py_PRINT_RAW);
 
-        /*PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
+        PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_wav_aligned");
+        PyObject* import_data_args = PyTuple_New(3);
+        PyTuple_SetItem(import_data_args, 0, filename);
+        PyTuple_SetItem(import_data_args, 1, wav_format);
+        PyTuple_SetItem(import_data_args, 2, selection);
+        PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
+        printf("Imported data from file \"%s\".\n", arg1);
+
+        /*
+        PyObject* shape = PyTuple_GetItem(selection, 2);
+        PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
         printf("Python ndarray reshaping to:\n");
         PyObject_Print(shape,stdout,Py_PRINT_RAW);
         printf("\n");
