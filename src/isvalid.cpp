@@ -36,8 +36,8 @@ int main()
 {
     Py_InitializeEx(0);
 
-    unsigned int bin_size = 2400;//48000
-    cout << "Assuming bin size " << bin_size << endl;
+    unsigned int denominator = 128;// chunk size
+    cout << "Assuming denominator " << denominator << endl;
     for (unsigned int log_env = 0; log_env < 10; ++log_env)
     {
         goopax::envmode env = static_cast<goopax::envmode>(1 << log_env);
@@ -73,19 +73,15 @@ int main()
                     cout << "\"" << type_to_python_name(t.first) << "\":\n";
                     for (const auto& s : t.second) {
                         const auto _itemsize = itemsize(s.first);
-                        unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(queue_variables+user_variables)*_itemsize,d.min_host_ptr_alignment());//Intel CPU
+                        unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(queue_variables+user_variables),denominator);//Intel CPU
                         if (d.max_registers()>=queue_variables+user_variables) {
-                            min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables)*_itemsize,d.min_host_ptr_alignment());
+                            min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),denominator);
                         }
-                        cout << "Assuming minimal aligned buffer size " << min_len << " bytes" << endl;
+                        cout << "Assuming minimal aligned buffer size " << min_len*_itemsize << " bytes" << endl;
                         auto shape = check_shape(d, min_len);
                         cout << shape << endl;
                         auto strides = make_strides(shape, _itemsize);
                         cout << strides << endl;
-                        auto new_bin_size = lcm(shape[2]*shape[3],bin_size);
-                        cout << "Assuming minimal bin length " << new_bin_size << " symbols, actual bin length " << shape[2]*shape[3] << " symbols" << endl;
-                        auto queue_factor = new_bin_size/(shape[2]*shape[3]);
-                        cout << "Adjusted minimal queue length " << queue_factor*shape[2] << " symbols, actual queue length " << shape[2] << " symbols" << endl;
                     }
                     cout << endl;
                 }

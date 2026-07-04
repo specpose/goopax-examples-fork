@@ -9,7 +9,7 @@ CHUNK = 128
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 48000
-RECORD_SECONDS = 1176 # 96
+RECORD_SECONDS = 18.816
 
 with wave.open('output.wav', 'wb') as wf:
     p = pyaudio.PyAudio()
@@ -20,7 +20,7 @@ with wave.open('output.wav', 'wb') as wf:
     stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True)
 
     print('Recording...')
-    for _ in range(0, RATE // CHUNK * RECORD_SECONDS):
+    for _ in range(0, int(RATE // CHUNK * RECORD_SECONDS)):
         wf.writeframes(stream.read(CHUNK))
     print('Done')
 

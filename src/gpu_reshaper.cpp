@@ -16,8 +16,8 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
         //    buffy[i] = 0;
         //});
         //  Does not work for GOOPAX_ENV=1
-        gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
-            gpu_for(0+local_id()*shape2*_shape3, local_size()*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
+        gpu_for(0+global_id()*shape2*_shape3, shape0*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
+            gpu_for(0+local_id()*shape2*_shape3, shape1*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
                 gpu_for(j+_shape3, shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
                 for(unsigned int l = 0; l < _shape3; ++l) {
                 //gpu_for(k, _shape3, 1, [&buffy](gpu_uint l) {
@@ -42,8 +42,8 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
         //    buffy[i] = 0;
         //});
         //Does not work for GOOPAX_ENV=1
-        gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
-            gpu_for(0+local_id()*shape2*_shape3, local_size()*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
+        gpu_for(0+global_id()*shape2*_shape3, shape0*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
+            gpu_for(0+local_id()*shape2*_shape3, shape1*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
                 gpu_for(j+_shape3, shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
                 for(unsigned int l = 0; l < _shape3; ++l) {
                 //gpu_for(k, _shape3, 1, [&buffy](gpu_uint l) {
@@ -242,8 +242,8 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         std::size_t padding = view->len % device_alignment == 0 ? 0 : device_alignment - (view->len % device_alignment);
         std::cout << "padding " << padding << " len " << len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
         buffer<T> buffy(*(_self->device), len + (padding/view->itemsize), (T*)view->buf, BUFFER_READ_WRITE);
-        kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), *(_self->func), shape1, shape0);
-        //kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0);
+        kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), *(_self->func), shape1, shape0*shape1);
+        //kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0*shape1);
         process(buffy,shape0,shape1,shape2);
         //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
         //    printf("%d,",((T*)view->buf)[i]);
