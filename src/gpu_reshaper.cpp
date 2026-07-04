@@ -8,10 +8,9 @@ typedef short T;
 using namespace goopax;
 static const Py_ssize_t queue_variables = 3;
 static const Py_ssize_t user_variables = 1;
-/*
-class simd_function : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> {
+class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> {
     public:
-        simd_function(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
+        silence(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
     void operator()(resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2){
         //gpu_for(0+global_id(), shape0*shape1*shape2*_shape3,[&buffy](gpu_uint i){
         //    buffy[i] = 0;
@@ -32,15 +31,8 @@ class simd_function : public std::function<void(resource<T>&,gpu_uint,gpu_uint,g
     private:
     unsigned int _shape3;
 };
-*/
 
-/*struct simd_function {
-    unsigned int _shape3;
-    static const unsigned int queue_variables = 3;
-    static const unsigned int user_variables = 1;
-    std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint,gpu_uint)> afunc;
-};*/
-struct silence {
+/*struct silence {
     silence(goopax_device& d) : _shape3(d.max_registers() - queue_variables - user_variables) {}
     unsigned int _shape3;
     static const unsigned int queue_variables = 3;
@@ -62,7 +54,7 @@ struct silence {
             });
         });
     };
-};
+};*/
 
 
 
@@ -250,8 +242,8 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         std::size_t padding = view->len % device_alignment == 0 ? 0 : device_alignment - (view->len % device_alignment);
         std::cout << "padding " << padding << " len " << len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
         buffer<T> buffy(*(_self->device), len + (padding/view->itemsize), (T*)view->buf, BUFFER_READ_WRITE);
-        //kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), *(_self->func), shape1, shape0);
-        kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0);
+        kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), *(_self->func), shape1, shape0);
+        //kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0);
         process(buffy,shape0,shape1,shape2);
         //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
         //    printf("%d,",((T*)view->buf)[i]);
