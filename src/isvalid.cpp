@@ -36,6 +36,7 @@ int main()
 {
     Py_InitializeEx(0);
 
+    unsigned int numerator = 48000;// sample rate
     unsigned int denominator = 128;// chunk size
     cout << "Assuming denominator " << denominator << endl;
     for (unsigned int log_env = 0; log_env < 10; ++log_env)
@@ -73,9 +74,9 @@ int main()
                     cout << "\"" << type_to_python_name(t.first) << "\":\n";
                     for (const auto& s : t.second) {
                         const auto _itemsize = itemsize(s.first);
-                        unsigned int min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(queue_variables+user_variables),denominator);//Intel CPU
+                        unsigned int min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(queue_variables+user_variables),denominator);//Intel CPU
                         if (d.max_registers()>=queue_variables+user_variables) {
-                            min_len = lcm((d.default_global_size_min()/d.default_local_size())*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),denominator);
+                            min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),denominator);
                         }
                         cout << "Assuming minimal aligned buffer size " << min_len*_itemsize << " bytes" << endl;
                         auto shape = check_shape(d, min_len);

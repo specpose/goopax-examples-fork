@@ -12,21 +12,23 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
     public:
         silence(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
     void operator()(resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2){
-        //gpu_for(0+global_id(), shape0*shape1*shape2*_shape3,[&buffy](gpu_uint i){
-        //    buffy[i] = 0;
-        //});
+        gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
+            for(unsigned int l = 0; l < _shape3; ++l) {
+                buffy[k+l] = 1;
+            }
+        });
         //  Does not work for GOOPAX_ENV=1
-        gpu_for(0+global_id()*shape2*_shape3, shape0*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
+        /*gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
             gpu_for(0+local_id()*shape2*_shape3, shape1*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
                 gpu_for(j+_shape3, shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
                 for(unsigned int l = 0; l < _shape3; ++l) {
                 //gpu_for(k, _shape3, 1, [&buffy](gpu_uint l) {
-                    buffy[l] = 0;
+                    buffy[l] = 1;
                 //});
                 }
                 });
             });
-        });
+        });*/
     };
     private:
     unsigned int _shape3;
@@ -42,7 +44,7 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
         //    buffy[i] = 0;
         //});
         //Does not work for GOOPAX_ENV=1
-        gpu_for(0+global_id()*shape2*_shape3, shape0*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
+        gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
             gpu_for(0+local_id()*shape2*_shape3, shape1*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
                 gpu_for(j+_shape3, shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
                 for(unsigned int l = 0; l < _shape3; ++l) {
@@ -228,25 +230,25 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         //Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
         //PyObject* obj = PyMemoryView_GET_BASE(mvobject);
         Py_buffer* view = new Py_buffer;
-        if (PyObject_GetBuffer(mvobject, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
+        if (PyObject_GetBuffer(mvobject, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT | PyBUF_WRITABLE)==0){
         printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
         auto shape = safe_copy(view->shape, view->ndim);
         auto strides = safe_copy(view->strides, view->ndim);
-        std::size_t len = view->len / view->itemsize;
         unsigned int shape0 = shape[0];
         unsigned int shape1 = shape[1];
         unsigned int shape2 = shape[2];
         unsigned int shape3 = shape[3];
         std::size_t device_alignment = _self->device->min_host_ptr_alignment();
         printf("Device min host ptr alignment: %d\n", device_alignment);
-        std::size_t padding = view->len % device_alignment == 0 ? 0 : device_alignment - (view->len % device_alignment);
-        std::cout << "padding " << padding << " len " << len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
-        buffer<T> buffy(*(_self->device), len + (padding/view->itemsize), (T*)view->buf, BUFFER_READ_WRITE);
+        std::size_t padded = (view->len + device_alignment - 1) & ~(device_alignment - 1);
+        std::cout << "padded " << padded << " len " << view->len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
+        buffer<T> buffy(*(_self->device), view->len/view->itemsize, (T*)view->buf, BUFFER_READ_WRITE);
         kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), *(_self->func), shape1, shape0*shape1);
         //kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0*shape1);
         process(buffy,shape0,shape1,shape2);
-        //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
-        //    printf("%d,",((T*)view->buf)[i]);
+        _self->device->wait_all();
+        for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
+            printf("%d,",((T*)view->buf)[i]);
         //std::cout<< buffy << std::endl;
         PyBuffer_Release(view);
         }

@@ -44,10 +44,10 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax::goopax_device& d, con
     }
 
     /*  Workgroups  */
-    if (d.default_global_size_min() % d.default_local_size() != 0 || len / d.default_global_size_min() < 1) {
+    if (len / d.default_num_groups_min() < 1) {
         shape[0] = 1;
     } else {
-        shape[0] = d.default_global_size_min() / d.default_local_size();
+        shape[0] = d.default_num_groups_min();
     }
 
     /*  ALUs  */
