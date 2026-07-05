@@ -12,23 +12,25 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
     public:
         silence(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
     void operator()(resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2){
-        gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
-            for(unsigned int l = 0; l < _shape3; ++l) {
-                buffy[k+l] = 1;
-            }
-        });
+        //gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
+        //    //  Does not work for GOOPAX_ENV=1
+        //    for(unsigned int l = 0; l < _shape3; ++l) {
+        //        buffy[k+l] = 1;
+        //    }
+        //});
         //  Does not work for GOOPAX_ENV=1
-        /*gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
-            gpu_for(0+local_id()*shape2*_shape3, shape1*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
-                gpu_for(j+_shape3, shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
-                for(unsigned int l = 0; l < _shape3; ++l) {
-                //gpu_for(k, _shape3, 1, [&buffy](gpu_uint l) {
-                    buffy[l] = 1;
-                //});
-                }
+        gpu_for(group_id()*local_size()*shape2*_shape3, buffy.size(), num_groups()*local_size()*shape2*_shape3, [&buffy,shape2,this](gpu_uint i){
+
+            gpu_for(local_id()*shape2*_shape3,num_groups()*local_size()*shape2*_shape3,local_size()*shape2*_shape3,[&buffy,shape2,this](gpu_uint j){
+
+                gpu_for(j, j+shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
+                    for(unsigned int l = 0; l < _shape3; ++l) {
+                        buffy[k+l] = 1;
+                    }
                 });
             });
-        });*/
+        });
+
     };
     private:
     unsigned int _shape3;
@@ -40,36 +42,8 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
     static const unsigned int queue_variables = 3;
     static const unsigned int user_variables = 1;
     std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> afunc = [&](resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2) {
-        //gpu_for(0+global_id(), shape0*shape1*shape2*_shape3,[&buffy](gpu_uint i){
-        //    buffy[i] = 0;
-        //});
-        //Does not work for GOOPAX_ENV=1
-        gpu_for(0+group_id()*shape1*shape2*_shape3, num_groups()*shape1*shape2*_shape3, shape1*shape2*_shape3, [&buffy,shape1,shape2,this](gpu_uint i){
-            gpu_for(0+local_id()*shape2*_shape3, shape1*shape2*_shape3, shape2*_shape3, [&buffy,shape2,this](gpu_uint j){
-                gpu_for(j+_shape3, shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
-                for(unsigned int l = 0; l < _shape3; ++l) {
-                //gpu_for(k, _shape3, 1, [&buffy](gpu_uint l) {
-                    buffy[l] = 0;
-                //});
-                }
-                });
-            });
-        });
     };
 };*/
-
-
-
-    /*T* _buffer = (T*)buffer;
-    for (Py_ssize_t i=0; i<shape[0]; ++i) {
-        for (Py_ssize_t j=0; j<shape[1]; ++j) {
-            for (Py_ssize_t k=0; k<shape[2]; ++k) {
-                for (Py_ssize_t l=0; l<(max_registers()-qv-uv); ++l) {
-                    _buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]=_buffer[(i*strides[0]+j*strides[1]+k*strides[2]+l*strides[3])/sizeof(T)]*2;
-                }
-            }
-        }
-    }*/
 
 #define PY_SSIZE_T_CLEAN
 #define Py_LIMITED_API
