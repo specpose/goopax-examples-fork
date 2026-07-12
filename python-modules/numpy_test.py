@@ -51,40 +51,27 @@ def import_wav_aligned(filename, wav_format, shape):
     import gpu_buffer
     from gpu_buffer import CustomBuffer
     buffy = CustomBuffer(wav_format[0], shape[2], shape[3])
-
-    #n_bytes = str(int(header["bits_per_sample"][0]/8))
-    #dt = numpy.dtype('i'+n_bytes)
-    #bview = memoryview(buffy)
-    #result = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
-    #result = numpy.frombuffer(bview, dtype=dt)
-    #result = numpy.frombuffer(bview, dtype=dt, count=4608000)
-    #result = numpy.frombuffer(bview, dtype=dt, count=int(header["data_size"][0]/(header["bits_per_sample"][0]/8)))
-    #result = numpy.frombuffer(bview, dtype=dt, count=int(header["data_size"][0]/(header["bits_per_sample"][0]/8)), like=array_like)
-    #f.read(44)
-    #rview = memoryview(result)
-    #if not (f.readinto(rview) == header["data_size"][0]):
-    #    raise Exception("Could not read file into numpy array")
-    #rview.release()
-    #bview.release()
+    bview = memoryview(buffy)
+    f.read(44)
+    if not (f.readinto(bview) == header["data_size"][0]):
+        raise Exception("Could not read file into numpy array")
+    #print(bview.tobytes())
+    #bview.release() # double free
     f.close()
-    return buffy
+    return bview
 
-def export_data(filename, arr):
+def export_data(filename, mview):
     header = import_header(filename)
     f = open(filename, 'rb+')
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
     f.seek(44)
-    n_bytes = str(int(header["bits_per_sample"][0]/8))
-    dt = numpy.dtype('i'+n_bytes)
-    np_arr = numpy.frombuffer(arr, dtype=dt)
-    f.write(np_arr.tobytes())
+    print(type(mview))
+    print(mview)
+    #print(mview.tobytes())
+    f.write(mview.tobytes())
     f.close()
 
 import sys
 if __name__ == "__main__":
-    header = import_header(sys.argv[1])
-    print(header)
-    arr = import_data(sys.argv[1])
-    print(arr[1151999])
-    print(arr.itemsize)
+    pass

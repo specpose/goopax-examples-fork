@@ -346,7 +346,7 @@ int main(){
 
         //PyObject* typing_m = PyImport_ImportModule("typing");
         //PyObject* callable_t = PyObject_GetAttrString(typing_m,"Callable");
-        PyTypeObject custom_type_descr = SimdFunction_Type(sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
+        /*PyTypeObject custom_type_descr = SimdFunction_Type(sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
         if (PyType_Ready(&custom_type_descr) < 0)
             abort();
         PyObject* Initialisation = PyTuple_New(2);
@@ -364,12 +364,13 @@ int main(){
         PyObject* result = PyObject_CallObject(Custom_Callable, process_args);
         PyObject_Del((void*)Custom_Callable);
         //PyBuffer_Release(view);
-        //}
+        //}*/
 
         printf("Exporting data to file \"%s\".\n", arg1);
         PyObject* export_data = PyObject_GetAttrString(numpy_test_m,"export_data");
         PyObject* export_data_args = PyTuple_New(2);
         PyTuple_SetItem(export_data_args, 0, filename);
+        Py_INCREF(numpy_array);
         PyTuple_SetItem(export_data_args, 1, numpy_array);
         PyObject_CallObject(export_data,export_data_args);
     }
