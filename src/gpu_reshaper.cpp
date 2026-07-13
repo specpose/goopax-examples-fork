@@ -12,25 +12,21 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
     public:
         silence(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
     void operator()(resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2){
-        //gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
-        //    //  Does not work for GOOPAX_ENV=1
-        //    for(unsigned int l = 0; l < _shape3; ++l) {
-        //        buffy[k+l] = 1;
-        //    }
-        //});
-        //  Does not work for GOOPAX_ENV=1
-        gpu_for(group_id()*local_size()*shape2*_shape3, buffy.size(), num_groups()*local_size()*shape2*_shape3, [&buffy,shape2,this](gpu_uint i){
-
-            gpu_for(local_id()*shape2*_shape3,num_groups()*local_size()*shape2*_shape3,local_size()*shape2*_shape3,[&buffy,shape2,this](gpu_uint j){
-
-                gpu_for(j, j+shape2*_shape3, _shape3, [&buffy,this](gpu_uint k){
-                    for(unsigned int l = 0; l < _shape3; ++l) {
-                        buffy[k+l] = 1;
-                    }
-                });
-            });
+        // Does not work for GOOPAX_ENV=1
+        gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
+            for(unsigned int l = 0; l < _shape3; ++l) {
+                buffy[k+l] -= 257; // T
+            }
         });
-
+        //gpu_for_group(0, num_groups(), [&buffy,shape1,shape2,this](gpu_uint i){
+        //    gpu_for_local(0, local_size(), [&buffy,shape2,this](gpu_uint j){
+        //        gpu_for(0, shape2, [&buffy,shape2,this](gpu_uint k){
+        //            for (unsigned int l = 0; l < _shape3; ++l) {
+        //                buffy[global_id()*shape2*_shape3+k*_shape3+l] -= 257; // T
+        //            }
+        //        });
+        //    });
+        //});
     };
     private:
     unsigned int _shape3;
@@ -221,8 +217,8 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         //kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0*shape1);
         process(buffy,shape0,shape1,shape2);
         _self->device->wait_all();
-        for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
-            printf("%d,",((T*)view->buf)[i]);
+        //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
+        //    printf("%d,",((T*)view->buf)[i]);
         //std::cout<< buffy << std::endl;
         PyBuffer_Release(view);
         }
@@ -346,7 +342,7 @@ int main(){
 
         //PyObject* typing_m = PyImport_ImportModule("typing");
         //PyObject* callable_t = PyObject_GetAttrString(typing_m,"Callable");
-        /*PyTypeObject custom_type_descr = SimdFunction_Type(sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
+        PyTypeObject custom_type_descr = SimdFunction_Type(sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
         if (PyType_Ready(&custom_type_descr) < 0)
             abort();
         PyObject* Initialisation = PyTuple_New(2);
@@ -364,7 +360,7 @@ int main(){
         PyObject* result = PyObject_CallObject(Custom_Callable, process_args);
         PyObject_Del((void*)Custom_Callable);
         //PyBuffer_Release(view);
-        //}*/
+        //}
 
         printf("Exporting data to file \"%s\".\n", arg1);
         PyObject* export_data = PyObject_GetAttrString(numpy_test_m,"export_data");

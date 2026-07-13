@@ -56,20 +56,22 @@ def import_wav_aligned(filename, wav_format, shape):
     if not (f.readinto(bview) == header["data_size"][0]):
         raise Exception("Could not read file into numpy array")
     #print(bview.tobytes())
-    #bview.release() # double free
+    bview.release()
     f.close()
-    return bview
+    return buffy
 
-def export_data(filename, mview):
+def export_data(filename, buffy):
     header = import_header(filename)
     f = open(filename, 'rb+')
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
     f.seek(44)
+    mview = memoryview(buffy)
     print(type(mview))
     print(mview)
     #print(mview.tobytes())
     f.write(mview.tobytes())
+    mview.release()
     f.close()
 
 import sys
