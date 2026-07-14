@@ -28,7 +28,7 @@ std::vector<goopax::goopax_device> test_env(unsigned int env) {
 }
 
 /*  Logic   */
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> check_shape(goopax::goopax_device& d, const Py_ssize_t len) {
+std::array<Py_ssize_t, PyBUF_MAX_NDIM> SimdCheck_shape(goopax::goopax_device& d, const Py_ssize_t len) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::fill(std::begin(shape), std::end(shape), 0);
 

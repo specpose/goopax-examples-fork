@@ -83,7 +83,7 @@ PyObject* convert_descriptor_item(T& arr) {
     }
     return result;
 }
-static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::size_t alignment){
+static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::size_t alignment){
     PyObject* result = PyTuple_New(3);
     PyObject* f = PyUnicode_FromString(format.c_str());
     PyTuple_SetItem(result, 0, f);
@@ -94,7 +94,7 @@ static PyObject* memoryview_descriptor(PyObject* self, std::string format, std::
 
 #include <map>
 #include "gpu_reshaper.hpp"
-static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
+PyObject* host_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax::goopax_device&, const Py_ssize_t)> Check_shape, PyObject* empty, PyObject* args) {
     PyObject* result = PyList_New(0);
     const char* format = NULL;
     Py_ssize_t format_length = 0;
@@ -117,11 +117,11 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
                         PyObject* Device = PyTuple_New(2);
                         const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
                         PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
-                        auto gpu_shape = check_shape(dvec[device_i], length / itemsize(format));
+                        auto gpu_shape = Check_shape(dvec[device_i], length / itemsize(format));
                         //std::cout << gpu_shape << std::endl;
                         auto gpu_strides = make_strides(gpu_shape, itemsize(format));
                         //std::cout << gpu_strides << std::endl;
-                        PyObject* descr = memoryview_descriptor(self, std::string(format),gpu_shape, dvec[device_i].min_host_ptr_alignment());
+                        PyObject* descr = memoryview_descriptor(std::string(format),gpu_shape, dvec[device_i].min_host_ptr_alignment());
                         PyTuple_SetItem(Device, 1, descr);
                         PyList_Append(Devices, Device);
                     }
@@ -136,6 +136,9 @@ static PyObject* gpu_reshaper_test_memoryview(PyObject* self, PyObject* args){
         abort();
     }
     return result;
+}
+static PyObject* SimdFunction_host_query(PyObject* empty, PyObject* args){
+    return host_query(SimdCheck_shape, empty, args);
 }
 
 /*  Type    */
@@ -228,10 +231,12 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
     Py_INCREF(Py_None);
     return Py_None;
 };
+
 PyTypeObject SimdFunction_Type(
     const char* SimdFunction_name,
     const char* SimdFunction_doc_string,
     Py_ssize_t basic_size,
+    PyMethodDef* methods,
     PyObject* (*python_new_function)(PyTypeObject*, PyObject*, PyObject*),
     int (*python_init_function)(PyObject*, PyObject*, PyObject*),
     PyObject* (*python_call_function)(PyObject*, PyObject*, PyObject*),
@@ -249,7 +254,9 @@ PyTypeObject SimdFunction_Type(
     0,
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     PyDoc_STR(SimdFunction_doc_string),
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    methods,
+    0, 0, 0, 0, 0, 0, 0,
     (initproc)python_init_function,
     PyType_GenericAlloc,
     (newfunc)python_new_function,
@@ -261,22 +268,22 @@ PyTypeObject SimdFunction_Type(
 
 
 /*  Module  */
-static PyMethodDef gpu_reshaper_methods[] = {
-    {"test_memoryview", gpu_reshaper_test_memoryview, METH_VARARGS, ""},
-    {NULL, NULL, 0, NULL}
-};
 static struct PyModuleDef gpu_reshaper_module = {
     PyModuleDef_HEAD_INIT,
     "gpu_reshaper",
     "",
     0,
-    gpu_reshaper_methods,
+    0, // methods
     NULL,
     NULL,
     NULL,
     NULL
 };
-static PyTypeObject silence_type_descr = SimdFunction_Type("silence","Sets all the samples to zero",sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
+static PyMethodDef silence_py_methods[] = {
+    {"host_query", SimdFunction_host_query, METH_VARARGS | METH_STATIC, ""},
+    {NULL, NULL, 0, NULL}
+};
+static PyTypeObject silence_type_descr = SimdFunction_Type("silence","Sets all the samples to zero",sizeof(SimdFunction<silence>),silence_py_methods,SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
 PyMODINIT_FUNC PyInit_gpu_reshaper(void){
     PyObject* mod = PyModule_Create(&gpu_reshaper_module);
     if (PyModule_AddType(mod, &silence_type_descr) < 0)
@@ -312,8 +319,7 @@ int main(){
 
     PyObject* gpu_reshaper_m = PyImport_ImportModule("gpu_reshaper");
     PyObject* silence = PyObject_GetAttrString(gpu_reshaper_m,"silence");
-    PyObject* test = PyObject_GetAttrString(gpu_reshaper_m,"test_memoryview");
-    PyObject* descriptor = PyObject_CallObject(test,wav_format);
+    PyObject* descriptor = PyObject_CallMethod(silence,"host_query","O",wav_format);
     printf("Dumping memoryview descriptor:\n");
     PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
     printf("\n");
