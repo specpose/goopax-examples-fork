@@ -228,9 +228,9 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
     Py_INCREF(Py_None);
     return Py_None;
 };
-static const char SimdFunction_name[] = "simd_func";
-static const char SimdFunction_doc_string[] = "SIMD Function";
 PyTypeObject SimdFunction_Type(
+    const char* SimdFunction_name,
+    const char* SimdFunction_doc_string,
     Py_ssize_t basic_size,
     PyObject* (*python_new_function)(PyTypeObject*, PyObject*, PyObject*),
     int (*python_init_function)(PyObject*, PyObject*, PyObject*),
@@ -276,11 +276,11 @@ static struct PyModuleDef gpu_reshaper_module = {
     NULL,
     NULL
 };
+static PyTypeObject silence_type_descr = SimdFunction_Type("silence","Sets all the samples to zero",sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
 PyMODINIT_FUNC PyInit_gpu_reshaper(void){
     PyObject* mod = PyModule_Create(&gpu_reshaper_module);
-    //PyTypeObject custom_type_descr = SimdFunction_Type(SimdFunction_init<silence>);
-    //if (PyModule_AddObjectRef(mod, "silence", (PyObject*)&custom_type_descr) < 0)
-    //    abort();
+    if (PyModule_AddType(mod, &silence_type_descr) < 0)
+        abort();
     return mod;
 }
 
@@ -311,6 +311,7 @@ int main(){
     PyObject_Print(wav_format,stdout,Py_PRINT_RAW);
 
     PyObject* gpu_reshaper_m = PyImport_ImportModule("gpu_reshaper");
+    PyObject* silence = PyObject_GetAttrString(gpu_reshaper_m,"silence");
     PyObject* test = PyObject_GetAttrString(gpu_reshaper_m,"test_memoryview");
     PyObject* descriptor = PyObject_CallObject(test,wav_format);
     printf("Dumping memoryview descriptor:\n");
@@ -342,15 +343,10 @@ int main(){
         //PyTuple_SetItem(shape_args, 0, shape);
         //numpy_array = PyObject_CallObject(reshape, shape_args);
 
-        //PyObject* typing_m = PyImport_ImportModule("typing");
-        //PyObject* callable_t = PyObject_GetAttrString(typing_m,"Callable");
-        PyTypeObject custom_type_descr = SimdFunction_Type(sizeof(SimdFunction<silence>),SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
-        if (PyType_Ready(&custom_type_descr) < 0)
-            abort();
         PyObject* Initialisation = PyTuple_New(2);
         PyTuple_SetItem(Initialisation, 0, PyTuple_GetItem(selection, 0));
         PyTuple_SetItem(Initialisation, 1, PyTuple_GetItem(selection, 1));
-        PyObject* Custom_Callable = PyObject_CallObject((PyObject*)&custom_type_descr, Initialisation);
+        PyObject* Custom_Callable = PyObject_CallObject(silence, Initialisation);
 
         //Py_buffer* view;
         //if (PyObject_GetBuffer(numpy_array, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
