@@ -28,18 +28,18 @@ std::vector<goopax::goopax_device> test_env(unsigned int env) {
 }
 
 /*  Logic   */
-std::array<Py_ssize_t, PyBUF_MAX_NDIM> SimdCheck_shape(goopax::goopax_device& d, const Py_ssize_t len) {
+template<typename FunctionClass> std::array<Py_ssize_t, PyBUF_MAX_NDIM> SimdCheck_shape(goopax::goopax_device& d, const Py_ssize_t len) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::fill(std::begin(shape), std::end(shape), 0);
 
     /*  Explicit Unrolling  */
     if (d.max_registers() == 0) {
-        shape[3] = queue_variables + user_variables;
+        shape[3] = FunctionClass::queue_variables + FunctionClass::user_variables;
     } else {
-        if (len % (d.max_registers() - queue_variables - user_variables) != 0) {
+        if (len % (d.max_registers() - FunctionClass::queue_variables - FunctionClass::user_variables) != 0) {
             shape[3] = 1;
         } else {
-            shape[3] = d.max_registers() - queue_variables - user_variables;
+            shape[3] = d.max_registers() - FunctionClass::queue_variables - FunctionClass::user_variables;
         }
     }
 
