@@ -8,17 +8,19 @@ typedef short T;
 using namespace goopax;
 static const Py_ssize_t queue_variables = 3;
 static const Py_ssize_t user_variables = 1;
-class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> {
+class silence : public std::function<void(resource<T>&,gpu_uint)> {
     public:
-        silence(goopax_device& d) : std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
-    void operator()(resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2){
+        static const Py_ssize_t queue_variables = 3;
+        static const Py_ssize_t user_variables = 1;
+        silence(goopax_device& d) : std::function<void(resource<T>&,gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
+    void operator()(resource<T>& buffy, gpu_uint shape2){
         // Does not work for GOOPAX_ENV=1
         gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
             for(unsigned int l = 0; l < _shape3; ++l) {
                 buffy[k+l] -= 257; // T
             }
         });
-        //gpu_for_group(0, num_groups(), [&buffy,shape1,shape2,this](gpu_uint i){
+        //gpu_for_group(0, num_groups(), [&buffy,shape2,this](gpu_uint i){
         //    gpu_for_local(0, local_size(), [&buffy,shape2,this](gpu_uint j){
         //        gpu_for(0, shape2, [&buffy,shape2,this](gpu_uint k){
         //            for (unsigned int l = 0; l < _shape3; ++l) {
@@ -37,7 +39,7 @@ class silence : public std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uin
     unsigned int _shape3;
     static const unsigned int queue_variables = 3;
     static const unsigned int user_variables = 1;
-    std::function<void(resource<T>&,gpu_uint,gpu_uint,gpu_uint)> afunc = [&](resource<T>& buffy, gpu_uint shape0, gpu_uint shape1, gpu_uint shape2) {
+    std::function<void(resource<T>&,gpu_uint)> afunc = [&](resource<T>& buffy, gpu_uint shape2) {
     };
 };*/
 
@@ -213,9 +215,9 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
         std::size_t padded = (view->len + device_alignment - 1) & ~(device_alignment - 1);
         std::cout << "padded " << padded << " len " << view->len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
         buffer<T> buffy(*(_self->device), view->len/view->itemsize, (T*)view->buf, BUFFER_READ_WRITE);
-        kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), *(_self->func), shape1, shape0*shape1);
-        //kernel<void(buffer<T>&,unsigned int,unsigned int,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0*shape1);
-        process(buffy,shape0,shape1,shape2);
+        kernel<void(buffer<T>&,unsigned int)> process(*(_self->device), *(_self->func), shape1, shape0*shape1);
+        //kernel<void(buffer<T>&,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0*shape1);
+        process(buffy,shape2);
         _self->device->wait_all();
         //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
         //    printf("%d,",((T*)view->buf)[i]);
