@@ -30,52 +30,9 @@ void __delete(PyObject* X){
 #include <goopax_extra/types.hpp>
 #include "gpu_reshaper.hpp"
 #include "waterfall.hpp"
-#include <functional>
 
 /* Kernels  */
-class silence : public std::function<void(goopax::resource<T>&,goopax::gpu_uint)> {
-public:
-    static const Py_ssize_t queue_variables = 3;
-    static const Py_ssize_t user_variables = 1;
-    silence(goopax::goopax_device& d) : std::function<void(goopax::resource<T>&,goopax::gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
-    void operator()(goopax::resource<T>& buffy, goopax::gpu_uint shape2){
-        // Does not work for GOOPAX_ENV=1
-        gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
-            for(unsigned int l = 0; l < _shape3; ++l) {
-                buffy[k+l] -= 257; // T
-            }
-        });
-        //gpu_for_group(0, num_groups(), [&buffy,shape2,this](gpu_uint i){
-        //    gpu_for_local(0, local_size(), [&buffy,shape2,this](gpu_uint j){
-        //        gpu_for(0, shape2, [&buffy,shape2,this](gpu_uint k){
-        //            for (unsigned int l = 0; l < _shape3; ++l) {
-        //                buffy[global_id()*shape2*_shape3+k*_shape3+l] -= 257; // T
-        //            }
-        //        });
-        //    });
-        //});
-    };
-private:
-    unsigned int _shape3;
-};
-/*
-struct silence {
-  silence(goopax_device& d) : _shape3(d.max_registers() - queue_variables - user_variables) {}
-  unsigned int _shape3;
-  static const unsigned int queue_variables = 3;
-  static const unsigned int user_variables = 1;
-  std::function<void(resource<T>&,goopax::gpu_uint)> afunc = [&](resource<T>& buffy, goopax::gpu_uint shape2) {
-  };
-};
-*/
-static PyObject* silence_host_query(PyObject* empty, PyObject* args){
-    return host_query(SimdCheck_shape<silence>, empty, args);
-}
-static PyMethodDef silence_py_methods[] = {
-    {"host_query", silence_host_query, METH_VARARGS | METH_STATIC, ""},
-    {NULL, NULL, 0, NULL}
-};
-static PyTypeObject silence_type_descr = SimdFunction_Type("silence","Sets all the samples to zero",sizeof(SimdFunction<silence>),silence_py_methods,SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
+#include "mykernels.hpp"
 
 /*  Module  */
 static struct PyModuleDef gpu_reshaper_module = {
@@ -89,6 +46,11 @@ static struct PyModuleDef gpu_reshaper_module = {
     NULL,
     NULL
 };
+static PyMethodDef silence_py_methods[] = {
+    {"host_query", silence_host_query, METH_VARARGS | METH_STATIC, ""},
+    {NULL, NULL, 0, NULL}
+};
+static PyTypeObject silence_type_descr = SimdFunction_Type("silence","Sets all the samples to zero",sizeof(SimdFunction<silence>),silence_py_methods,SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
 PyMODINIT_FUNC PyInit_gpu_reshaper(void){
     PyObject* mod = PyModule_Create(&gpu_reshaper_module);
     if (PyModule_AddType(mod, &silence_type_descr) < 0)
@@ -113,9 +75,9 @@ int main(){
     PyTuple_SetItem(append_args, 0, directory);
     PyObject_CallObject(append,append_args);
 
-    PyObject* numpy_test_m = PyImport_ImportModule("numpy_test");
+    PyObject* import_wav_m = PyImport_ImportModule("import_wav");
 
-    PyObject* get_format = PyObject_GetAttrString(numpy_test_m,"wav_format");
+    PyObject* get_format = PyObject_GetAttrString(import_wav_m,"wav_format");
     PyObject* get_format_args = PyTuple_New(1);
     PyObject* filename = PyUnicode_FromString(arg1);
     PyTuple_SetItem(get_format_args, 0, filename);
@@ -137,7 +99,7 @@ int main(){
         PyObject* selection = PyObject_CallObject(select,select_args);
         PyObject_Print(selection,stdout,Py_PRINT_RAW);
 
-        PyObject* import_data = PyObject_GetAttrString(numpy_test_m,"import_wav_aligned");
+        PyObject* import_data = PyObject_GetAttrString(import_wav_m,"import_wav_aligned");
         PyObject* import_data_args = PyTuple_New(3);
         PyTuple_SetItem(import_data_args, 0, filename);
         PyTuple_SetItem(import_data_args, 1, wav_format);
@@ -172,7 +134,7 @@ int main(){
         //}
 
         printf("Exporting data to file \"%s\".\n", arg1);
-        PyObject* export_data = PyObject_GetAttrString(numpy_test_m,"export_data");
+        PyObject* export_data = PyObject_GetAttrString(import_wav_m,"export_data");
         PyObject* export_data_args = PyTuple_New(2);
         PyTuple_SetItem(export_data_args, 0, filename);
         Py_INCREF(numpy_array);

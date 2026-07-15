@@ -11,7 +11,12 @@ static Py_ssize_t queue_variables = 3;
 static Py_ssize_t user_variables = 1;
 #include "gpu_reshaper.hpp"
 
+typedef short T;
 using namespace goopax;
+#include "waterfall.hpp"
+#include "mykernels.hpp"
+using FunctionClass = silence;
+
 using namespace std;
 
 #include <map>
@@ -74,12 +79,12 @@ int main()
                     cout << "\"" << type_to_python_name(t.first) << "\":\n";
                     for (const auto& s : t.second) {
                         const auto _itemsize = itemsize(s.first);
-                        unsigned int min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(queue_variables+user_variables),denominator);//Intel CPU
-                        if (d.max_registers()>=queue_variables+user_variables) {
-                            min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-queue_variables-user_variables),denominator);
+                        unsigned int min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(FunctionClass::queue_variables+FunctionClass::user_variables),denominator);//Intel CPU
+                        if (d.max_registers()>=FunctionClass::queue_variables+FunctionClass::user_variables) {
+                            min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-FunctionClass::queue_variables-FunctionClass::user_variables),denominator);
                         }
                         cout << "Assuming minimal aligned buffer size " << min_len*_itemsize << " bytes" << endl;
-                        auto shape = check_shape(d, min_len);
+                        auto shape = SimdCheck_shape<FunctionClass>(d, min_len);
                         cout << shape << endl;
                         auto strides = make_strides(shape, _itemsize);
                         cout << strides << endl;

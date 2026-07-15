@@ -1,5 +1,36 @@
+#include <functional>
 using namespace goopax;
 
+/*  GPU  */
+std::vector<goopax::goopax_device> test_env(unsigned int env) {
+    std::vector<goopax::goopax_device> dvec{};
+    if (test_dev(env))
+        dvec = goopax::devices(static_cast<goopax::envmode>(env));
+    return dvec;
+}
+static constexpr const char* backend_names[] = { "CPU", "OpenCL", "CUDA", "Metal", "Vulkan" };
+std::string type_to_python_name(goopax::type_enum_t type) { return goopax::type_enum_raw_names[type / goopax::num_type_modes]; };
+/*  https://docs.python.org/3/library/struct.html#format-characters */
+/*  https://numpy.org/doc/stable/reference/arrays.interface.html#arrays-interface   */
+static std::map<goopax::type_enum_t, std::map<std::string, std::string>> known_types {
+    {goopax::type_enum<double>::value, { {std::string("d"),std::string("f")} }},
+    {goopax::type_enum<int16_t>::value, { {std::string("h"),std::string("i")} }}
+};
+const std::map<goopax::type_enum_t, std::map<std::string, std::string>> register_types(goopax::goopax_device& d) {
+    std::map<goopax::type_enum_t, std::map<std::string, std::string>> registered_type{};
+    for (unsigned int t = 0; t < std::size(goopax::type_enum_raw_names); ++t)
+    {
+        const auto enumerated_type = static_cast<goopax::type_enum_t>(t * goopax::num_type_modes);
+        if (d.support_type(enumerated_type))
+        {
+            if (known_types.find(enumerated_type) != end(known_types))
+                registered_type[enumerated_type] = known_types[enumerated_type];
+        }
+    }
+    return registered_type;
+};
+
+/* Util */
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t len) {
     std::array<Py_ssize_t, PyBUF_MAX_NDIM> copy{};
     std::fill(std::begin(copy), std::end(copy), 0);
@@ -7,7 +38,6 @@ std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t l
         copy[i] = *(first + i);
     return copy;
 };
-
 template<typename T>
 PyObject* convert_descriptor_item(T& arr) {
     auto pos = std::find(std::begin(arr),std::end(arr),0);
@@ -18,7 +48,6 @@ PyObject* convert_descriptor_item(T& arr) {
     }
     return result;
 }
-
 static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::size_t alignment){
     PyObject* result = PyTuple_New(3);
     PyObject* f = PyUnicode_FromString(format.c_str());
@@ -28,6 +57,7 @@ static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t
     return result;
 }
 
+/* Interface */
 PyObject* host_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax_device&, const Py_ssize_t)> Check_shape, PyObject* empty, PyObject* args) {
     PyObject* result = PyList_New(0);
     const char* format = NULL;
@@ -72,7 +102,45 @@ PyObject* host_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax
     return result;
 }
 
-/*  Type    */
+/*  Interface: Types    */
+template<typename FunctionClass> std::array<Py_ssize_t, PyBUF_MAX_NDIM> SimdCheck_shape(goopax::goopax_device& d, const Py_ssize_t len) {
+    auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
+    std::fill(std::begin(shape), std::end(shape), 0);
+
+    /*  Explicit Unrolling  */
+    if (d.max_registers() == 0) {
+        shape[3] = FunctionClass::queue_variables + FunctionClass::user_variables;
+    } else {
+        if (len % (d.max_registers() - FunctionClass::queue_variables - FunctionClass::user_variables) != 0) {
+            shape[3] = 1;
+        } else {
+            shape[3] = d.max_registers() - FunctionClass::queue_variables - FunctionClass::user_variables;
+        }
+    }
+
+    /*  Workgroups  */
+    if (len / d.default_num_groups_min() < 1) {
+        shape[0] = 1;
+    } else {
+        shape[0] = d.default_num_groups_min();
+    }
+
+    /*  ALUs  */
+    if (len / d.default_local_size() < 1) {
+        shape[1] = 1;
+    } else {
+        shape[1] = d.default_local_size();
+    }
+
+    /*  Queue  */
+    if (len / shape[0] / shape[1] / shape[3] < 1) {
+        shape[2] = 1;
+    } else {
+        shape[2] = len / (shape[0] * shape[1] * shape[3]);
+    }
+
+    return shape;
+};
 template<typename FunctionClass> struct SimdFunction{
     PyObject_VAR_HEAD
     goopax_device* device;
@@ -124,7 +192,7 @@ template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject*
     _self->func = nullptr;
     return -1;
 };
-#include <goopax_extra/output.hpp>
+//#include <goopax_extra/output.hpp>
 template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyObject *args, PyObject *kwargs) {
     printf("Call\n");
     SimdFunction<FunctionClass>* _self = (SimdFunction<FunctionClass>*) self;
