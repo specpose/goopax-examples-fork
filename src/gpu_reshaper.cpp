@@ -1,10 +1,9 @@
+//#define PY_SSIZE_T_CLEAN
+//#define Py_LIMITED_API
 #include <Python.h>
 #include <stdio.h>
 
 typedef short T;
-
-#define PY_SSIZE_T_CLEAN
-#define Py_LIMITED_API
 
 #if DEBUG
 #define Py_DECREF_bak Py_DECREF
@@ -104,7 +103,7 @@ int main(){
         PyTuple_SetItem(import_data_args, 0, filename);
         PyTuple_SetItem(import_data_args, 1, wav_format);
         PyTuple_SetItem(import_data_args, 2, selection);
-        PyObject* numpy_array = PyObject_CallObject(import_data,import_data_args);
+        PyObject* custom_buffer = PyObject_CallObject(import_data,import_data_args);
         printf("Imported data from file \"%s\".\n", arg1);
 
         //PyObject* shape = PyTuple_GetItem(selection, 2);
@@ -124,8 +123,8 @@ int main(){
         //Py_buffer* view;
         //if (PyObject_GetBuffer(numpy_array, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
         PyObject* process_args = PyTuple_New(1);
-        PyObject* mv = PyMemoryView_GetContiguous(numpy_array, PyBUF_WRITE, 'C');
-        //PyObject* mv = PyMemoryView_FromObject(numpy_array);
+        PyObject* mv = PyMemoryView_GetContiguous(custom_buffer, PyBUF_WRITE, 'C');
+        //PyObject* mv = PyMemoryView_FromObject(custom_buffer);
         //PyObject* mv = PyMemoryView_FromBuffer(view);
         PyTuple_SetItem(process_args, 0, mv);
         PyObject* result = PyObject_CallObject(Custom_Callable, process_args);
@@ -137,8 +136,8 @@ int main(){
         PyObject* export_data = PyObject_GetAttrString(import_wav_m,"export_data");
         PyObject* export_data_args = PyTuple_New(2);
         PyTuple_SetItem(export_data_args, 0, filename);
-        Py_INCREF(numpy_array);
-        PyTuple_SetItem(export_data_args, 1, numpy_array);
+        Py_INCREF(custom_buffer);
+        PyTuple_SetItem(export_data_args, 1, custom_buffer);
         PyObject_CallObject(export_data,export_data_args);
     }
 
