@@ -13,20 +13,14 @@ def test_wav_simd(filename):
     import device_selector
     from device_selector import retrieve_shape
     selection = retrieve_shape(descriptor)
+    print("Using:")
     print(selection)
 
     from import_wav import import_wav_aligned
     custom_buffer = import_wav_aligned(filename,wav_format,selection)
     print("Imported data from file "+filename+".")
 
-    arg1 = selection[0]
-    print(type(arg1))
-    print(arg1)
-    arg2 = bytes(selection[1])
-    print(type(arg2))
-    print(arg2)
-    print("uuid length is "+str(len(arg2)))
-    Custom_Callable = silence(arg1,arg2)
+    Custom_Callable = silence(selection[0],bytes(selection[1]))
 
     mv = memoryview(custom_buffer)
     result = Custom_Callable(mv)

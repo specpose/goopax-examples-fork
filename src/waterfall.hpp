@@ -147,11 +147,11 @@ template<typename FunctionClass> struct SimdFunction{
     FunctionClass* func;
 };
 void SimdFunction_dealloc(PyObject* self) {
-    printf("Dealloc\n");
+    //printf("Dealloc\n");
     Py_TYPE(self)->tp_free(self);
 };
 template<typename FunctionClass> PyObject* SimdFunction_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds){
-    printf("New\n");
+    //printf("New\n");
     SimdFunction<FunctionClass>* obj = (SimdFunction<FunctionClass>*)subtype->tp_alloc(subtype, 0);
     if (obj != NULL) {
         obj->func = (FunctionClass*)malloc(sizeof(FunctionClass));
@@ -159,20 +159,18 @@ template<typename FunctionClass> PyObject* SimdFunction_new(PyTypeObject *subtyp
     return (PyObject*)obj;
 };
 template<typename FunctionClass> void SimdFunction_free(void *self) {
-    printf("Free\n");
+    //printf("Free\n");
     SimdFunction<FunctionClass>* obj = (SimdFunction<FunctionClass>*)self;
     free((void*)obj->func);
 };
 template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject* args, PyObject* kwds) {
-    printf("Init\n");
+    //printf("Init\n");
     SimdFunction<FunctionClass>* _self = (SimdFunction<FunctionClass>*) self;
     int log_env = 0;
     const unsigned char* gpu_uuid = NULL;
     Py_ssize_t gpu_uuid_length = 0;
     if (PyArg_ParseTuple(args, "iy#", &log_env, &gpu_uuid, &gpu_uuid_length)) {
         const Py_ssize_t d_uuid_length = std::tuple_size<std::array< uint8_t, 16 >>{};
-        printf("log_env is %d.\n",log_env);
-        printf("uuid_length is %d.\n",gpu_uuid_length);
         if (gpu_uuid_length!=d_uuid_length)
             abort();
 
@@ -180,17 +178,10 @@ template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject*
         std::vector<goopax_device> dvec = devices(static_cast<envmode>(env));
         for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
             const std::array< uint8_t, d_uuid_length >& d_uuid= dvec[device_i].uuid();
-            for(std::size_t i = 0; i < gpu_uuid_length; ++i)
-                printf("%x,",gpu_uuid[i]);
-            printf("\n");
-            for(std::size_t i = 0; i < d_uuid_length; ++i)
-                printf("%x,",gpu_uuid[i]);
-            printf("\n");
             if (memcmp(gpu_uuid, d_uuid.data(), d_uuid_length) == 0) {
                 _self->device = dvec[device_i];
-                dvec[device_i];
                 _self->func = new FunctionClass(dvec[device_i]);
-                printf("Init Success\n");
+                //printf("Init Success\n");
                 return 0;
             }
         }
@@ -200,7 +191,7 @@ template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject*
 };
 //#include <goopax_extra/output.hpp>
 template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyObject *args, PyObject *kwargs) {
-    printf("Call\n");
+    //printf("Call\n");
     SimdFunction<FunctionClass>* _self = (SimdFunction<FunctionClass>*) self;
     PyObject* mvobject = NULL;
 
@@ -219,7 +210,7 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
             unsigned int shape2 = shape[2];
             unsigned int shape3 = shape[3];
             std::size_t device_alignment = _self->device.min_host_ptr_alignment();
-            printf("Device min host ptr alignment: %d\n", device_alignment);
+            //printf("Device min host ptr alignment: %d\n", device_alignment);
             std::size_t padded = (view->len + device_alignment - 1) & ~(device_alignment - 1);
             std::cout << "padded " << padded << " len " << view->len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
             buffer<T> buffy(_self->device, view->len/view->itemsize, (T*)view->buf, BUFFER_READ_WRITE);
@@ -228,7 +219,7 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
             process(buffy,shape2);
             _self->device.wait_all();
             //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
-            //    printf("%d,",((T*)view->buf)[i]);
+            //    //printf("%d,",((T*)view->buf)[i]);
             //std::cout<< buffy << std::endl;
             PyBuffer_Release(view);
         }

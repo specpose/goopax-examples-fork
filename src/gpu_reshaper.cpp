@@ -1,9 +1,17 @@
+#include <stdio.h>
+//#include <algorithm>
+//#include <array>
+//#include <string>
+//#include <iostream>
+//#include <map>
+#include <goopax_extra/types.hpp>
+
 //#define PY_SSIZE_T_CLEAN
 //#define Py_LIMITED_API
-#include <Python.h>
-#include <stdio.h>
+#include "gpu_buffer.cpp"
 
 typedef short T;
+#include "waterfall.hpp"
 
 #if DEBUG
 #define Py_DECREF_bak Py_DECREF
@@ -19,16 +27,6 @@ void __delete(PyObject* X){
 #undef Py_DECREF
 #define Py_DECREF(X) __delete(X);
 #endif
-
-#include <algorithm>
-#include <array>
-#include <string>
-#include <iostream>
-
-#include <map>
-#include <goopax_extra/types.hpp>
-#include "gpu_reshaper.hpp"
-#include "waterfall.hpp"
 
 /* Kernels  */
 #include "mykernels.hpp"
@@ -61,6 +59,7 @@ PyMODINIT_FUNC PyInit_gpu_reshaper(void){
 int main(){
     const char* arg1 = "../output.wav";
 
+    PyImport_AppendInittab("gpu_buffer", PyInit_gpu_buffer);
     PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
     Py_InitializeEx(0);
     PyGILState_STATE gstate;
