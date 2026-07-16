@@ -74,72 +74,13 @@ int main(){
     PyTuple_SetItem(append_args, 0, directory);
     PyObject_CallObject(append,append_args);
 
-    PyObject* import_wav_m = PyImport_ImportModule("import_wav");
+    PyObject* test_m = PyImport_ImportModule("test");
 
-    PyObject* get_format = PyObject_GetAttrString(import_wav_m,"wav_format");
-    PyObject* get_format_args = PyTuple_New(1);
+    PyObject* test_wav_simd = PyObject_GetAttrString(test_m,"test_wav_simd");
+    PyObject* test_wav_simd_args = PyTuple_New(1);
     PyObject* filename = PyUnicode_FromString(arg1);
-    PyTuple_SetItem(get_format_args, 0, filename);
-    PyObject* wav_format = PyObject_CallObject(get_format,get_format_args);
-    PyObject_Print(wav_format,stdout,Py_PRINT_RAW);
-
-    PyObject* gpu_reshaper_m = PyImport_ImportModule("gpu_reshaper");
-    PyObject* silence = PyObject_GetAttrString(gpu_reshaper_m,"silence");
-    PyObject* descriptor = PyObject_CallMethod(silence,"host_query","O",wav_format);
-    printf("Dumping memoryview descriptor:\n");
-    PyObject_Print(descriptor,stdout,Py_PRINT_RAW);
-    printf("\n");
-
-    if (PyList_Size(descriptor)>0){
-        PyObject* device_selector_m = PyImport_ImportModule("device_selector");
-        PyObject* select = PyObject_GetAttrString(device_selector_m,"retrieve_shape");
-        PyObject* select_args = PyTuple_New(1);
-        PyTuple_SetItem(select_args, 0, descriptor);
-        PyObject* selection = PyObject_CallObject(select,select_args);
-        PyObject_Print(selection,stdout,Py_PRINT_RAW);
-
-        PyObject* import_data = PyObject_GetAttrString(import_wav_m,"import_wav_aligned");
-        PyObject* import_data_args = PyTuple_New(3);
-        PyTuple_SetItem(import_data_args, 0, filename);
-        PyTuple_SetItem(import_data_args, 1, wav_format);
-        PyTuple_SetItem(import_data_args, 2, selection);
-        PyObject* custom_buffer = PyObject_CallObject(import_data,import_data_args);
-        printf("Imported data from file \"%s\".\n", arg1);
-
-        //PyObject* shape = PyTuple_GetItem(selection, 2);
-        //PyObject* reshape = PyObject_GetAttrString(numpy_array,"reshape");
-        //printf("Python ndarray reshaping to:\n");
-        //PyObject_Print(shape,stdout,Py_PRINT_RAW);
-        //printf("\n");
-        //PyObject* shape_args = PyTuple_New(1);
-        //PyTuple_SetItem(shape_args, 0, shape);
-        //numpy_array = PyObject_CallObject(reshape, shape_args);
-
-        PyObject* Initialisation = PyTuple_New(2);
-        PyTuple_SetItem(Initialisation, 0, PyTuple_GetItem(selection, 0));
-        PyTuple_SetItem(Initialisation, 1, PyTuple_GetItem(selection, 1));
-        PyObject* Custom_Callable = PyObject_CallObject(silence, Initialisation);
-
-        //Py_buffer* view;
-        //if (PyObject_GetBuffer(numpy_array, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT)==0){
-        PyObject* process_args = PyTuple_New(1);
-        PyObject* mv = PyMemoryView_GetContiguous(custom_buffer, PyBUF_WRITE, 'C');
-        //PyObject* mv = PyMemoryView_FromObject(custom_buffer);
-        //PyObject* mv = PyMemoryView_FromBuffer(view);
-        PyTuple_SetItem(process_args, 0, mv);
-        PyObject* result = PyObject_CallObject(Custom_Callable, process_args);
-        PyObject_Del((void*)Custom_Callable);
-        //PyBuffer_Release(view);
-        //}
-
-        printf("Exporting data to file \"%s\".\n", arg1);
-        PyObject* export_data = PyObject_GetAttrString(import_wav_m,"export_data");
-        PyObject* export_data_args = PyTuple_New(2);
-        PyTuple_SetItem(export_data_args, 0, filename);
-        Py_INCREF(custom_buffer);
-        PyTuple_SetItem(export_data_args, 1, custom_buffer);
-        PyObject_CallObject(export_data,export_data_args);
-    }
+    PyTuple_SetItem(test_wav_simd_args, 0, filename);
+    PyObject_CallObject(test_wav_simd,test_wav_simd_args);
 
     PyGILState_Release(gstate);
 #if DEBUG
