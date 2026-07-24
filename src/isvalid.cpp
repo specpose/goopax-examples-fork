@@ -15,7 +15,6 @@ typedef short T;
 using namespace goopax;
 #include "waterfall.hpp"
 #include "mykernels.hpp"
-using FunctionClass = silence;
 
 using namespace std;
 
@@ -78,15 +77,12 @@ int main()
                 for (const auto& t : registered_type) {
                     cout << "\"" << type_to_python_name(t.first) << "\":\n";
                     for (const auto& s : t.second) {
-                        const auto _itemsize = itemsize(s.first);
-                        unsigned int min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(FunctionClass::queue_variables+FunctionClass::user_variables),denominator);//Intel CPU
-                        if (d.max_registers()>=FunctionClass::queue_variables+FunctionClass::user_variables) {
-                            min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-FunctionClass::queue_variables-FunctionClass::user_variables),denominator);
-                        }
-                        cout << "Assuming minimal aligned buffer size " << min_len*_itemsize << " bytes" << endl;
-                        auto shape = SimdCheck_shape<FunctionClass>(d, min_len);
+                        const auto is = itemsize(s.first);
+                        auto ml = min_len<silence>(d, denominator);
+                        cout << "Assuming minimal aligned buffer size " << ml*is << " bytes" << endl;
+                        auto shape = SimdCheck_shape<silence>(d, ml);
                         cout << shape << endl;
-                        auto strides = make_strides(shape, _itemsize);
+                        auto strides = make_strides(shape, is);
                         cout << strides << endl;
                     }
                     cout << endl;

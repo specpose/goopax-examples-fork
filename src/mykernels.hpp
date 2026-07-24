@@ -32,6 +32,13 @@ struct silence {
     std::function<void(resource<T>&,goopax::gpu_uint)> afunc = [&](resource<T>& buffy, goopax::gpu_uint shape2) {};
 };
 */
-static PyObject* silence_host_query(PyObject* empty, PyObject* args){
+template<> PyObject* host_query<silence>(PyObject* empty, PyObject* args){
     return host_query(SimdCheck_shape<silence>, empty, args);
+}
+template<> Py_ssize_t min_len<silence>(goopax_device& d, Py_ssize_t denominator) {
+    Py_ssize_t min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(silence::queue_variables+silence::user_variables),denominator);//Intel CPU
+    if (d.max_registers()>=silence::queue_variables+silence::user_variables) {
+        min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-silence::queue_variables-silence::user_variables),denominator);
+    }
+    return min_len;
 }

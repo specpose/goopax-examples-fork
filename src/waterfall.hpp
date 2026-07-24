@@ -31,6 +31,19 @@ const std::map<goopax::type_enum_t, std::map<std::string, std::string>> register
 };
 
 /* Util */
+unsigned long long lcm(unsigned long a, unsigned long b) {
+    unsigned long& larger = a;
+    unsigned long& smaller = b;
+    if (a<b){
+        larger = b;
+        smaller = a;
+    }
+    unsigned int n = 1;
+    while (n*smaller%larger!=0) {
+        ++n;
+    }
+    return n*smaller;
+}
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t len) {
     std::array<Py_ssize_t, PyBUF_MAX_NDIM> copy{};
     std::fill(std::begin(copy), std::end(copy), 0);
@@ -141,6 +154,8 @@ template<typename FunctionClass> std::array<Py_ssize_t, PyBUF_MAX_NDIM> SimdChec
 
     return shape;
 };
+template<typename FunctionClass> PyObject* host_query(PyObject* empty, PyObject* args);
+template<typename FunctionClass> Py_ssize_t min_len(goopax_device& d, Py_ssize_t denominator);
 template<typename FunctionClass> struct SimdFunction{
     PyObject_VAR_HEAD
     goopax_device device;

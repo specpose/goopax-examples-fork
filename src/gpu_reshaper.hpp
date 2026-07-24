@@ -18,17 +18,3 @@ std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
     return s;
 }
 }
-
-unsigned long long lcm(unsigned long a, unsigned long b) {
-    unsigned long& larger = a;
-    unsigned long& smaller = b;
-    if (a<b){
-        larger = b;
-        smaller = a;
-    }
-    unsigned int n = 1;
-    while (n*smaller%larger!=0) {
-        ++n;
-    }
-    return n*smaller;
-}

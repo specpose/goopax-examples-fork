@@ -44,7 +44,7 @@ static struct PyModuleDef gpu_reshaper_module = {
     NULL
 };
 static PyMethodDef silence_py_methods[] = {
-    {"host_query", silence_host_query, METH_VARARGS | METH_STATIC, ""},
+    {"host_query", host_query<silence>, METH_VARARGS | METH_STATIC, ""},
     {NULL, NULL, 0, NULL}
 };
 static PyTypeObject silence_type_descr = SimdFunction_Type("silence","Sets all the samples to zero",sizeof(SimdFunction<silence>),silence_py_methods,SimdFunction_new<silence>,SimdFunction_init<silence>,SimdFunction_call<silence>,SimdFunction_free<silence>);
