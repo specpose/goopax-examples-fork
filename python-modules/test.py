@@ -1,3 +1,22 @@
+def test_generator_simd(filename):
+    import import_wav
+    from import_wav import wav_format
+    wav_format = wav_format(filename)
+    print(wav_format)
+
+    import gpu_reshaper
+    from gpu_reshaper import silence
+    descriptor = silence.host_query(wav_format[0], wav_format[1], denominator=128)
+
+    print("Dumping memoryview descriptor:")
+    print(descriptor)
+
+    import struct
+    from struct import calcsize
+    for gpx_env,gpu_set in descriptor:
+        for gpu in gpu_set:
+            print(gpu[1][3]*calcsize(gpu[1][0]))
+
 def test_wav_simd(filename):
     import import_wav
     from import_wav import wav_format

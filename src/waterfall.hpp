@@ -61,82 +61,38 @@ PyObject* convert_descriptor_item(T& arr) {
     }
     return result;
 }
-static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::size_t alignment){
-    PyObject* result = PyTuple_New(3);
+static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::size_t alignment, std::size_t min_len){
+    PyObject* result = PyTuple_New(4);
     PyObject* f = PyUnicode_FromString(format.c_str());
     PyTuple_SetItem(result, 0, f);
     PyTuple_SetItem(result, 1, convert_descriptor_item(shape));
     PyTuple_SetItem(result, 2, PyLong_FromLong(alignment));
+    PyTuple_SetItem(result, 3, PyLong_FromLong(min_len));
     return result;
 }
 
 /* Interface */
-class simd_function : public std::function<void(goopax::resource<T>&,goopax::gpu_uint)> {
+struct base_function {
+    static const Py_ssize_t queue_variables;
+    static const Py_ssize_t user_variables;
+
+};
+class simd_function : public base_function, public std::function<void(goopax::resource<T>&,goopax::gpu_uint)> {
 public:
     static const Py_ssize_t queue_variables = 3;
     static const Py_ssize_t user_variables = 1;
-    static PyObject* IFhost_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax_device&, const Py_ssize_t)> Check_shape, PyObject* empty, PyObject* args);
-    simd_function(goopax::goopax_device& d) : std::function<void(goopax::resource<T>&,goopax::gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
-protected:
-    unsigned int _shape3;
-};
-PyObject* simd_function::IFhost_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax_device&, const Py_ssize_t)> Check_shape, PyObject* empty, PyObject* args) {
-    PyObject* result = PyList_New(0);
-    const char* format = NULL;
-    Py_ssize_t format_length = 0;
-    Py_ssize_t length = 0;
-    if (PyArg_ParseTuple(args, "s#n", &format, &format_length, &length)) {
-        printf("Got format: %s, and len: %d\n", format, length);
-        for (unsigned int log_env = 0; log_env < 10; ++log_env) {
-            envmode env = static_cast<envmode>(1 << log_env);
-            std::vector<goopax_device> dvec = test_env(env);
-            if (!dvec.empty()){
-                PyObject* Env = PyTuple_New(2);
-                PyTuple_SetItem(Env, 0, PyLong_FromLong(log_env));
-                PyObject* Devices = PyList_New(0);
-                for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
-                    //if (!(*shape==gpu_shape && *strides==gpu_strides))
-                    auto registered_type = register_types(dvec[device_i]);
-                    for (const auto& dev_ts : registered_type){
-                        for (const auto& t : dev_ts.second){
-                            if (t.first == format && itemsize(t.first) == itemsize(format)) {
-                                PyObject* Device = PyTuple_New(2);
-                                const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
-                                PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
-                                auto gpu_shape = Check_shape(dvec[device_i], length / itemsize(format));
-                                //std::cout << gpu_shape << std::endl;
-                                auto gpu_strides = make_strides(gpu_shape, itemsize(format));
-                                //std::cout << gpu_strides << std::endl;
-                                PyObject* descr = memoryview_descriptor(std::string(format),gpu_shape, dvec[device_i].min_host_ptr_alignment());
-                                PyTuple_SetItem(Device, 1, descr);
-                                PyList_Append(Devices, Device);
-                            }
-                        }
-                    }
-                }
-                PyTuple_SetItem(Env, 1, Devices);
-                PyList_Append(result, Env);
-            }
-        }
-    } else {
-        abort();
-    }
-    return result;
-}
-
-/*  Interface: Types    */
-template<typename FunctionClass> std::array<Py_ssize_t, PyBUF_MAX_NDIM> SimdCheck_shape(goopax::goopax_device& d, const Py_ssize_t len) {
+    static const std::array<Py_ssize_t, PyBUF_MAX_NDIM> Check_shape(goopax::goopax_device& d, const Py_ssize_t len) {
     auto shape = std::array<Py_ssize_t, PyBUF_MAX_NDIM>{};
     std::fill(std::begin(shape), std::end(shape), 0);
 
     /*  Explicit Unrolling  */
     if (d.max_registers() == 0) {
-        shape[3] = FunctionClass::queue_variables + FunctionClass::user_variables;
+        shape[3] = queue_variables + user_variables;
     } else {
-        if (len % (d.max_registers() - FunctionClass::queue_variables - FunctionClass::user_variables) != 0) {
+        if (len % (d.max_registers() - queue_variables - user_variables) != 0) {
             shape[3] = 1;
         } else {
-            shape[3] = d.max_registers() - FunctionClass::queue_variables - FunctionClass::user_variables;
+            shape[3] = d.max_registers() - queue_variables - user_variables;
         }
     }
 
@@ -162,34 +118,47 @@ template<typename FunctionClass> std::array<Py_ssize_t, PyBUF_MAX_NDIM> SimdChec
     }
 
     return shape;
+    };
+    static const Py_ssize_t Min_len(goopax_device& d, const Py_ssize_t denominator) {
+        Py_ssize_t min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(simd_function::queue_variables+simd_function::user_variables),denominator);//Intel CPU
+        if (d.max_registers()>=simd_function::queue_variables+simd_function::user_variables) {
+            min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-simd_function::queue_variables-simd_function::user_variables),denominator);
+        }
+        return min_len;
+    }
+    simd_function(goopax::goopax_device& d) : std::function<void(goopax::resource<T>&,goopax::gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
+protected:
+    unsigned int _shape3;
 };
-template<typename FunctionClass> PyObject* host_query(PyObject* empty, PyObject* args);
-template<typename FunctionClass> Py_ssize_t min_len(goopax_device& d, Py_ssize_t denominator);
-template<typename FunctionClass> struct SimdFunction{
+
+/*  Interface: Types    */
+//template<typename FunctionClass> PyObject* host_query(PyObject* empty, PyObject* args);
+//template<typename FunctionClass> Py_ssize_t min_len(goopax_device& d, Py_ssize_t denominator);
+template<typename FunctionClass> struct BaseFunction{
     PyObject_VAR_HEAD
     goopax_device device;
     FunctionClass* func;
 };
-void SimdFunction_dealloc(PyObject* self) {
+void BaseFunction_dealloc(PyObject* self) {
     //printf("Dealloc\n");
     Py_TYPE(self)->tp_free(self);
 };
-template<typename FunctionClass> PyObject* SimdFunction_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds){
+template<typename FunctionClass> PyObject* BaseFunction_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds){
     //printf("New\n");
-    SimdFunction<FunctionClass>* obj = (SimdFunction<FunctionClass>*)subtype->tp_alloc(subtype, 0);
+    BaseFunction<FunctionClass>* obj = (BaseFunction<FunctionClass>*)subtype->tp_alloc(subtype, 0);
     if (obj != NULL) {
         obj->func = (FunctionClass*)malloc(sizeof(FunctionClass));
     }
     return (PyObject*)obj;
 };
-template<typename FunctionClass> void SimdFunction_free(void *self) {
+template<typename FunctionClass> void BaseFunction_free(void *self) {
     //printf("Free\n");
-    SimdFunction<FunctionClass>* obj = (SimdFunction<FunctionClass>*)self;
+    BaseFunction<FunctionClass>* obj = (BaseFunction<FunctionClass>*)self;
     free((void*)obj->func);
 };
-template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject* args, PyObject* kwds) {
+template<typename FunctionClass> int BaseFunction_init(PyObject* self, PyObject* args, PyObject* kwds) {
     //printf("Init\n");
-    SimdFunction<FunctionClass>* _self = (SimdFunction<FunctionClass>*) self;
+    BaseFunction<FunctionClass>* _self = (BaseFunction<FunctionClass>*) self;
     int log_env = 0;
     const unsigned char* gpu_uuid = NULL;
     Py_ssize_t gpu_uuid_length = 0;
@@ -214,9 +183,9 @@ template<typename FunctionClass> int SimdFunction_init(PyObject* self, PyObject*
     return -1;
 };
 //#include <goopax_extra/output.hpp>
-template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyObject *args, PyObject *kwargs) {
+template<typename FunctionClass> PyObject* BaseFunction_call(PyObject *self, PyObject *args, PyObject *kwargs) {
     //printf("Call\n");
-    SimdFunction<FunctionClass>* _self = (SimdFunction<FunctionClass>*) self;
+    BaseFunction<FunctionClass>* _self = (BaseFunction<FunctionClass>*) self;
     PyObject* mvobject = NULL;
 
     if (PyArg_ParseTuple(args, "O", &mvobject)) {
@@ -250,9 +219,57 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
     Py_INCREF(Py_None);
     return Py_None;
 };
-PyTypeObject SimdFunction_Type(
-    const char* SimdFunction_name,
-    const char* SimdFunction_doc_string,
+/* Optional: Types */
+template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* empty, PyObject* args, PyObject* kwargs) {
+    printf("Host Query\n");
+    PY_CXX_CONST char *const kwlist[] = {"format", "length", "denominator", NULL};
+    PyObject* result = PyList_New(0);
+    const char* format = NULL;
+    Py_ssize_t format_length = 0;
+    Py_ssize_t length = 0;
+    int denominator = 1;
+    if (PyArg_ParseTupleAndKeywords(args, kwargs, "s#n|i", kwlist, &format, &format_length, &length, &denominator)) {
+        printf("Got format: %s, len: %d, and denominator: %d\n", format, length, denominator);
+        for (unsigned int log_env = 0; log_env < 10; ++log_env) {
+            envmode env = static_cast<envmode>(1 << log_env);
+            std::vector<goopax_device> dvec = test_env(env);
+            if (!dvec.empty()){
+                PyObject* Env = PyTuple_New(2);
+                PyTuple_SetItem(Env, 0, PyLong_FromLong(log_env));
+                PyObject* Devices = PyList_New(0);
+                for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
+                    //if (!(*shape==gpu_shape && *strides==gpu_strides))
+                    auto registered_type = register_types(dvec[device_i]);
+                    for (const auto& dev_ts : registered_type){
+                        for (const auto& t : dev_ts.second){
+                            if (t.first == format && itemsize(t.first) == itemsize(format)) {
+                                PyObject* Device = PyTuple_New(2);
+                                const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
+                                PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
+                                auto gpu_shape = FunctionClass::Check_shape(dvec[device_i], length / itemsize(format));
+                                //std::cout << gpu_shape << std::endl;
+                                auto gpu_strides = make_strides(gpu_shape, itemsize(format));
+                                //std::cout << gpu_strides << std::endl;
+                                PyObject* descr = memoryview_descriptor(std::string(format), gpu_shape, dvec[device_i].min_host_ptr_alignment(), FunctionClass::Min_len(dvec[device_i], denominator));
+                                PyTuple_SetItem(Device, 1, descr);
+                                PyList_Append(Devices, Device);
+                            }
+                        }
+                    }
+                }
+                PyTuple_SetItem(Env, 1, Devices);
+                PyList_Append(result, Env);
+            }
+        }
+    } else {
+        abort();
+    }
+    return result;
+}
+
+PyTypeObject BaseFunction_Type(
+    const char* BaseFunction_name,
+    const char* BaseFunction_doc_string,
     Py_ssize_t basic_size,
     PyMethodDef* methods,
     PyObject* (*python_new_function)(PyTypeObject*, PyObject*, PyObject*),
@@ -262,16 +279,16 @@ PyTypeObject SimdFunction_Type(
 ) {
     PyTypeObject type = {
         PyVarObject_HEAD_INIT(NULL, 0) // typing.Callable
-        SimdFunction_name,
+        BaseFunction_name,
         basic_size,
         0,
-        (destructor)SimdFunction_dealloc,
+        (destructor)BaseFunction_dealloc,
         0, 0, 0, 0, 0, 0, 0, 0, 0,
-        (ternaryfunc)python_call_function, // SimdFunction_call
+        (ternaryfunc)python_call_function, // BaseFunction_call
         0, 0, 0,
         0,
         Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-        PyDoc_STR(SimdFunction_doc_string),
+        PyDoc_STR(BaseFunction_doc_string),
         0, 0, 0, 0, 0, 0,
         methods,
         0, 0, 0, 0, 0, 0, 0,

@@ -78,9 +78,9 @@ int main()
                     cout << "\"" << type_to_python_name(t.first) << "\":\n";
                     for (const auto& s : t.second) {
                         const auto is = itemsize(s.first);
-                        auto ml = min_len<silence>(d, denominator);
+                        auto ml = silence::Min_len(d, denominator);
                         cout << "Assuming minimal aligned buffer size " << ml*is << " bytes" << endl;
-                        auto shape = SimdCheck_shape<silence>(d, ml);
+                        auto shape = silence::Check_shape(d, ml);
                         cout << shape << endl;
                         auto strides = make_strides(shape, is);
                         cout << strides << endl;
