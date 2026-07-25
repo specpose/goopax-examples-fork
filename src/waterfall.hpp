@@ -205,7 +205,7 @@ template<typename FunctionClass> PyObject* BaseFunction_call(PyObject *self, PyO
             std::size_t device_alignment = _self->device.min_host_ptr_alignment();
             //printf("Device min host ptr alignment: %d\n", device_alignment);
             std::size_t padded = (view->len + device_alignment - 1) & ~(device_alignment - 1);
-            std::cout << "padded " << padded << " len " << view->len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
+            std::cout << "padded " << padded << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
             buffer<T> buffy(_self->device, view->len/view->itemsize, (T*)view->buf, BUFFER_READ_WRITE);
             kernel<void(buffer<T>&,unsigned int)> process(_self->device, *(_self->func), shape1, shape0*shape1);
             process(buffy,shape2);
@@ -228,7 +228,7 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
     Py_ssize_t format_length = 0;
     Py_ssize_t length = 0;
     int denominator = 1;
-    if (PyArg_ParseTupleAndKeywords(args, kwargs, "s#n|i", kwlist, &format, &format_length, &length, &denominator)) {
+    if (PyArg_ParseTupleAndKeywords(args, kwargs, "s#|ni", kwlist, &format, &format_length, &length, &denominator)) {
         printf("Got format: %s, len: %d, and denominator: %d\n", format, length, denominator);
         for (unsigned int log_env = 0; log_env < 10; ++log_env) {
             envmode env = static_cast<envmode>(1 << log_env);
@@ -246,7 +246,9 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
                                 PyObject* Device = PyTuple_New(2);
                                 const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
                                 PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
-                                auto gpu_shape = FunctionClass::Check_shape(dvec[device_i], length / itemsize(format));
+                                if (length==0)
+                                    length = FunctionClass::Min_len(dvec[device_i], denominator);
+                                auto gpu_shape = FunctionClass::Check_shape(dvec[device_i], length);
                                 //std::cout << gpu_shape << std::endl;
                                 auto gpu_strides = make_strides(gpu_shape, itemsize(format));
                                 //std::cout << gpu_strides << std::endl;

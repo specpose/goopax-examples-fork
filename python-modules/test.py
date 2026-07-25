@@ -11,27 +11,31 @@ def test_generator_simd(filename):
     print("Dumping memoryview descriptor:")
     print(descriptor)
 
-    import struct
-    from struct import calcsize
-    for gpx_env,gpu_set in descriptor:
-        for gpu in gpu_set:
-            print(gpu[1][3]*calcsize(gpu[1][0]))
+    import device_selector
+    from device_selector import retrieve_shape
+    selection = retrieve_shape(descriptor)
+    print("Using:")
+    print(selection)
+
+    from import_wav import generate_wav_aligned
+    generate_wav_aligned(wav_format,selection)
 
 def test_wav_simd(filename):
     import import_wav
     from import_wav import wav_format
     wav_format = wav_format(filename)
+    print(wav_format)
 
     import gpu_reshaper
     from gpu_reshaper import silence
-    descriptor = silence.host_query(wav_format[0], wav_format[1])
+    descriptor = silence.host_query(wav_format[0], length=wav_format[1])#, denominator=128)
 
     print("Dumping memoryview descriptor:")
     print(descriptor)
 
-    import device_selector
-    from device_selector import retrieve_shape
-    selection = retrieve_shape(descriptor)
+    #selection = (descriptor[0][0],descriptor[0][1][0][0],descriptor[0][1][0][1][1],descriptor[0][1][0][1][2])
+    selection = (descriptor[1][0],descriptor[1][1][0][0],descriptor[1][1][0][1][1],descriptor[1][1][0][1][2])
+    #selection = (descriptor[1][0],descriptor[1][1][1][0],descriptor[1][1][1][1][1],descriptor[1][1][1][1][2])
     print("Using:")
     print(selection)
 

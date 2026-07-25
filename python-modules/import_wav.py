@@ -31,7 +31,9 @@ def wav_format(filename):
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
     f.close()
-    return ('h',int(header["data_size"][0]))
+    import struct
+    from struct import calcsize
+    return ('h',int(header["data_size"][0]/calcsize('h')))
 
 def import_wav(filename, wav_format):
     header = import_header(filename)
@@ -58,6 +60,14 @@ def import_wav_aligned(filename, wav_format, shape):
     bview.release()
     f.close()
     return buffy
+
+def generate_wav_aligned(wav_format, shape):
+    import struct
+    from struct import calcsize
+    #for gpx_env,gpu_set in memoryview_descriptor:
+    #    for gpu in gpu_set:
+    #        print(gpu[1][3]*calcsize(gpu[1][0]))
+    print(shape[4]*calcsize(shape[5]))
 
 def export_data(filename, buffy):
     header = import_header(filename)

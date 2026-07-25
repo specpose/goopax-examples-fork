@@ -10,8 +10,8 @@ FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 48000
 RECORD_SECONDS = 18.816 #rx460
-#RECORD_SECONDS = 1.92 #hd530
-#RECORD_SECONDS = 0.008 #corei7
+#RECORD_SECONDS = 0.96 #hd530
+#RECORD_SECONDS = 0.008 #corei7 would be continued fraction, so make 3x
 
 with wave.open('output.wav', 'wb') as wf:
     p = pyaudio.PyAudio()
