@@ -1,8 +1,6 @@
-class silence : public std::function<void(goopax::resource<T>&,goopax::gpu_uint)> {
+class silence : public simd_function {
 public:
-    static const Py_ssize_t queue_variables = 3;
-    static const Py_ssize_t user_variables = 1;
-    silence(goopax::goopax_device& d) : std::function<void(goopax::resource<T>&,goopax::gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
+    using simd_function::simd_function;
     // Does not work for GOOPAX_ENV=1
     void operator()(goopax::resource<T>& buffy, goopax::gpu_uint shape2){
         //gpu_for(0+global_id()*_shape3, buffy.size(), global_size()*_shape3, [&buffy,this](gpu_uint k){
@@ -20,20 +18,9 @@ public:
             });
         });
     };
-private:
-    unsigned int _shape3;
 };
-/*
-struct silence {
-    silence(goopax_device& d) : _shape3(d.max_registers() - queue_variables - user_variables) {}
-    unsigned int _shape3;
-    static const unsigned int queue_variables = 3;
-    static const unsigned int user_variables = 1;
-    std::function<void(resource<T>&,goopax::gpu_uint)> afunc = [&](resource<T>& buffy, goopax::gpu_uint shape2) {};
-};
-*/
 template<> PyObject* host_query<silence>(PyObject* empty, PyObject* args){
-    return host_query(SimdCheck_shape<silence>, empty, args);
+    return silence::IFhost_query(SimdCheck_shape<silence>, empty, args);
 }
 template<> Py_ssize_t min_len<silence>(goopax_device& d, Py_ssize_t denominator) {
     Py_ssize_t min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(silence::queue_variables+silence::user_variables),denominator);//Intel CPU

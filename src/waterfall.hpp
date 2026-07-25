@@ -71,7 +71,16 @@ static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t
 }
 
 /* Interface */
-PyObject* host_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax_device&, const Py_ssize_t)> Check_shape, PyObject* empty, PyObject* args) {
+class simd_function : public std::function<void(goopax::resource<T>&,goopax::gpu_uint)> {
+public:
+    static const Py_ssize_t queue_variables = 3;
+    static const Py_ssize_t user_variables = 1;
+    static PyObject* IFhost_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax_device&, const Py_ssize_t)> Check_shape, PyObject* empty, PyObject* args);
+    simd_function(goopax::goopax_device& d) : std::function<void(goopax::resource<T>&,goopax::gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
+protected:
+    unsigned int _shape3;
+};
+PyObject* simd_function::IFhost_query(std::function<std::array<Py_ssize_t, PyBUF_MAX_NDIM>(goopax_device&, const Py_ssize_t)> Check_shape, PyObject* empty, PyObject* args) {
     PyObject* result = PyList_New(0);
     const char* format = NULL;
     Py_ssize_t format_length = 0;
@@ -230,7 +239,6 @@ template<typename FunctionClass> PyObject* SimdFunction_call(PyObject *self, PyO
             std::cout << "padded " << padded << " len " << view->len << " shape0 " << shape0 << " shape1 " << shape1 << " shape2 " << shape2 << " shape3 " << shape3 << " ptr " << view->buf << std::endl;
             buffer<T> buffy(_self->device, view->len/view->itemsize, (T*)view->buf, BUFFER_READ_WRITE);
             kernel<void(buffer<T>&,unsigned int)> process(_self->device, *(_self->func), shape1, shape0*shape1);
-            //kernel<void(buffer<T>&,unsigned int)> process(*(_self->device), _self->func->afunc, shape1, shape0*shape1);
             process(buffy,shape2);
             _self->device.wait_all();
             //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
