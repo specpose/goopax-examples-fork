@@ -33,14 +33,12 @@ def test_wav_simd(filename):
     print("Dumping memoryview descriptor:")
     print(descriptor)
 
-    #selection = (descriptor[0][0],descriptor[0][1][0][0],descriptor[0][1][0][1][1],descriptor[0][1][0][1][2])
-    selection = (descriptor[1][0],descriptor[1][1][0][0],descriptor[1][1][0][1][1],descriptor[1][1][0][1][2])
-    #selection = (descriptor[1][0],descriptor[1][1][1][0],descriptor[1][1][1][1][1],descriptor[1][1][1][1][2])
+    selection = descriptor[1]
     print("Using:")
     print(selection)
 
     from import_wav import import_wav_aligned
-    custom_buffer = import_wav_aligned(filename,wav_format,selection)
+    custom_buffer = import_wav_aligned(filename,selection)
     print("Imported data from file "+filename+".")
 
     Custom_Callable = silence(selection[0],bytes(selection[1]))
@@ -54,4 +52,7 @@ def test_wav_simd(filename):
     export_data(filename,custom_buffer)
 
 if __name__ == "__main__":
+    import sys
+    from sys import path
+    path.append('../python-modules')
     test_wav_simd('../output.wav')

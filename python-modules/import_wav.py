@@ -45,14 +45,14 @@ def import_wav(filename, wav_format):
     f.close()
     return result
 
-def import_wav_aligned(filename, wav_format, shape):
+def import_wav_aligned(filename, selection):
     header = import_header(filename)
     f = open(filename, 'rb')
-    if (header["audio_fmt"][0] == 1 and wav_format[0] != 'h'):
+    if (header["audio_fmt"][0] == 1 and selection[2]['format'] != 'h'):
         raise Exception("Only short int is accepted")
     import gpu_buffer
     from gpu_buffer import CustomBuffer
-    buffy = CustomBuffer(wav_format[0], shape[2], shape[3])
+    buffy = CustomBuffer(selection[2]['format'], selection[2]['shape'], selection[2]['alignment'])
     bview = memoryview(buffy)
     f.read(44)
     if not (f.readinto(bview) == header["data_size"][0]):

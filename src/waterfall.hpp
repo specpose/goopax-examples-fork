@@ -62,12 +62,11 @@ PyObject* convert_descriptor_item(T& arr) {
     return result;
 }
 static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t, PyBUF_MAX_NDIM>& shape, std::size_t alignment, std::size_t min_len){
-    PyObject* result = PyTuple_New(4);
-    PyObject* f = PyUnicode_FromString(format.c_str());
-    PyTuple_SetItem(result, 0, f);
-    PyTuple_SetItem(result, 1, convert_descriptor_item(shape));
-    PyTuple_SetItem(result, 2, PyLong_FromLong(alignment));
-    PyTuple_SetItem(result, 3, PyLong_FromLong(min_len));
+    PyObject* result = PyDict_New();
+    PyDict_SetItem(result, PyUnicode_FromString("format"), PyUnicode_FromString(format.c_str()));
+    PyDict_SetItem(result, PyUnicode_FromString("shape"), convert_descriptor_item(shape));
+    PyDict_SetItem(result, PyUnicode_FromString("alignment"), PyLong_FromLong(alignment));
+    PyDict_SetItem(result, PyUnicode_FromString("min_len"), PyLong_FromLong(min_len));
     return result;
 }
 
@@ -223,7 +222,7 @@ template<typename FunctionClass> PyObject* BaseFunction_call(PyObject *self, PyO
 template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* empty, PyObject* args, PyObject* kwargs) {
     printf("Host Query\n");
     PY_CXX_CONST char *const kwlist[] = {"format", "length", "denominator", NULL};
-    PyObject* result = PyList_New(0);
+    PyObject* Devices = PyList_New(0);
     const char* format = NULL;
     Py_ssize_t format_length = 0;
     Py_ssize_t length = 0;
@@ -234,18 +233,16 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
             envmode env = static_cast<envmode>(1 << log_env);
             std::vector<goopax_device> dvec = test_env(env);
             if (!dvec.empty()){
-                PyObject* Env = PyTuple_New(2);
-                PyTuple_SetItem(Env, 0, PyLong_FromLong(log_env));
-                PyObject* Devices = PyList_New(0);
                 for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
                     //if (!(*shape==gpu_shape && *strides==gpu_strides))
                     auto registered_type = register_types(dvec[device_i]);
                     for (const auto& dev_ts : registered_type){
                         for (const auto& t : dev_ts.second){
                             if (t.first == format && itemsize(t.first) == itemsize(format)) {
-                                PyObject* Device = PyTuple_New(2);
+                                PyObject* Device = PyTuple_New(3);
+                                PyTuple_SetItem(Device, 0, PyLong_FromLong(log_env));
                                 const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
-                                PyTuple_SetItem(Device, 0, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
+                                PyTuple_SetItem(Device, 1, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
                                 if (length==0)
                                     length = FunctionClass::Min_len(dvec[device_i], denominator);
                                 auto gpu_shape = FunctionClass::Check_shape(dvec[device_i], length);
@@ -253,20 +250,18 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
                                 auto gpu_strides = make_strides(gpu_shape, itemsize(format));
                                 //std::cout << gpu_strides << std::endl;
                                 PyObject* descr = memoryview_descriptor(std::string(format), gpu_shape, dvec[device_i].min_host_ptr_alignment(), FunctionClass::Min_len(dvec[device_i], denominator));
-                                PyTuple_SetItem(Device, 1, descr);
+                                PyTuple_SetItem(Device, 2, descr);
                                 PyList_Append(Devices, Device);
                             }
                         }
                     }
                 }
-                PyTuple_SetItem(Env, 1, Devices);
-                PyList_Append(result, Env);
             }
         }
     } else {
         abort();
     }
-    return result;
+    return Devices;
 }
 
 PyTypeObject BaseFunction_Type(
