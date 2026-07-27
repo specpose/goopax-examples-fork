@@ -15,7 +15,7 @@ def test_generator_simd(filename):
     from device_selector import retrieve_shape
     selection = retrieve_shape(descriptor)
     print("Using:")
-    #print(selection)
+    print(selection)
 
     #from import_wav import generate_wav_aligned
     #generate_wav_aligned(wav_format,selection)
