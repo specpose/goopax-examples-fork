@@ -226,8 +226,8 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
     const char* format = NULL;
     Py_ssize_t format_length = 0;
     Py_ssize_t length = 0;
-    int denominator = 1;
-    if (PyArg_ParseTupleAndKeywords(args, kwargs, "s#|ni", kwlist, &format, &format_length, &length, &denominator)) {
+    Py_ssize_t denominator = 1;
+    if (PyArg_ParseTupleAndKeywords(args, kwargs, "s#|nn", kwlist, &format, &format_length, &length, &denominator)) {
         printf("Got format: %s, len: %d, and denominator: %d\n", format, length, denominator);
         for (unsigned int log_env = 0; log_env < 10; ++log_env) {
             envmode env = static_cast<envmode>(1 << log_env);
@@ -235,6 +235,7 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
             if (!dvec.empty()){
                 for (size_t device_i = 0; device_i < dvec.size(); ++device_i) {
                     //if (!(*shape==gpu_shape && *strides==gpu_strides))
+                    Py_ssize_t l = length==0 ? FunctionClass::Min_len(dvec[device_i], denominator) : length;
                     auto registered_type = register_types(dvec[device_i]);
                     for (const auto& dev_ts : registered_type){
                         for (const auto& t : dev_ts.second){
@@ -243,14 +244,13 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
                                 PyTuple_SetItem(Device, 0, PyLong_FromLong(log_env));
                                 const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
                                 PyTuple_SetItem(Device, 1, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
-                                if (length==0)
-                                    length = FunctionClass::Min_len(dvec[device_i], denominator);
-                                auto gpu_shape = FunctionClass::Check_shape(dvec[device_i], length);
+                                auto gpu_shape = FunctionClass::Check_shape(dvec[device_i], l);
                                 //std::cout << gpu_shape << std::endl;
                                 auto gpu_strides = make_strides(gpu_shape, itemsize(format));
                                 //std::cout << gpu_strides << std::endl;
                                 PyObject* descr = memoryview_descriptor(std::string(format), gpu_shape, dvec[device_i].min_host_ptr_alignment(), FunctionClass::Min_len(dvec[device_i], denominator));
                                 PyTuple_SetItem(Device, 2, descr);
+                                Py_INCREF(Device);
                                 PyList_Append(Devices, Device);
                             }
                         }

@@ -6,7 +6,7 @@ def test_generator_simd(filename):
 
     import gpu_reshaper
     from gpu_reshaper import silence
-    descriptor = silence.host_query(wav_format[0], wav_format[1], denominator=128)
+    descriptor = silence.host_query('h', denominator=128)
 
     print("Dumping memoryview descriptor:")
     print(descriptor)
@@ -15,10 +15,10 @@ def test_generator_simd(filename):
     from device_selector import retrieve_shape
     selection = retrieve_shape(descriptor)
     print("Using:")
-    print(selection)
+    #print(selection)
 
-    from import_wav import generate_wav_aligned
-    generate_wav_aligned(wav_format,selection)
+    #from import_wav import generate_wav_aligned
+    #generate_wav_aligned(wav_format,selection)
 
 def test_wav_simd(filename):
     import import_wav
@@ -28,7 +28,7 @@ def test_wav_simd(filename):
 
     import gpu_reshaper
     from gpu_reshaper import silence
-    descriptor = silence.host_query(wav_format[0], length=wav_format[1])#, denominator=128)
+    descriptor = silence.host_query(wav_format[0], length=wav_format[1])
 
     print("Dumping memoryview descriptor:")
     print(descriptor)
