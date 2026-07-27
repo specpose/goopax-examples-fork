@@ -57,7 +57,7 @@ PyMODINIT_FUNC PyInit_gpu_reshaper(void){
 
 #if !MODULE_LIBRARY
 int main(){
-    const char* arg1 = "../output.wav";
+    const char* arg1 = "./gpu_reshaper.out";
 
     PyImport_AppendInittab("gpu_buffer", PyInit_gpu_buffer);
     PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
@@ -75,11 +75,11 @@ int main(){
 
     PyObject* test_m = PyImport_ImportModule("test");
 
-    PyObject* test_wav_simd = PyObject_GetAttrString(test_m,"test_wav_simd");
-    PyObject* test_wav_simd_args = PyTuple_New(1);
+    PyObject* test_generator_simd = PyObject_GetAttrString(test_m,"test_generator_simd");
+    PyObject* test_generator_simd_args = PyTuple_New(1);
     PyObject* filename = PyUnicode_FromString(arg1);
-    PyTuple_SetItem(test_wav_simd_args, 0, filename);
-    PyObject_CallObject(test_wav_simd,test_wav_simd_args);
+    PyTuple_SetItem(test_generator_simd_args, 0, filename);
+    PyObject_CallObject(test_generator_simd,test_generator_simd_args);
 
     PyGILState_Release(gstate);
 #if DEBUG

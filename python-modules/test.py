@@ -1,10 +1,4 @@
 def test_generator_simd(filename):
-    import import_wav
-    from import_wav import wav_format
-    wav_format = wav_format(filename)
-    print(wav_format)
-
-    import gpu_reshaper
     from gpu_reshaper import silence
     descriptor = silence.host_query('h', denominator=128)
 
@@ -17,8 +11,21 @@ def test_generator_simd(filename):
     print("Using:")
     print(selection)
 
-    #from import_wav import generate_wav_aligned
-    #generate_wav_aligned(wav_format,selection)
+    from test_util import shape_to_len
+    from struct import calcsize
+    print("Generating minimal Input buffer size "+str(shape_to_len(selection[2]['shape'])*calcsize(selection[2]['format']))+" bytes...")
+    from import_wav import generate_data_aligned
+    custom_buffer = generate_data_aligned(selection)
+
+    Custom_Callable = silence(selection[0],bytes(selection[1]))
+
+    mv = memoryview(custom_buffer)
+    result = Custom_Callable(mv)
+    del Custom_Callable
+
+    print("Exporting data to file "+filename+".")
+    from import_wav import export_data
+    export_data(filename,custom_buffer)
 
 def test_wav_simd(filename):
     import import_wav
@@ -48,8 +55,8 @@ def test_wav_simd(filename):
     del Custom_Callable
 
     print("Exporting data to file "+filename+".")
-    from import_wav import export_data
-    export_data(filename,custom_buffer)
+    from import_wav import export_wav
+    export_wav(filename,custom_buffer)
 
 if __name__ == "__main__":
     import sys

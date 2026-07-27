@@ -61,20 +61,28 @@ def import_wav_aligned(filename, selection):
     f.close()
     return buffy
 
-def generate_wav_aligned(wav_format, shape):
-    import struct
-    from struct import calcsize
-    #for gpx_env,gpu_set in memoryview_descriptor:
-    #    for gpu in gpu_set:
-    #        print(gpu[1][3]*calcsize(gpu[1][0]))
-    print(shape[4]*calcsize(shape[5]))
+def generate_data_aligned(selection):
+    from gpu_buffer import CustomBuffer
+    buffy = CustomBuffer(selection[2]['format'], selection[2]['shape'], selection[2]['alignment'])
+    bview = memoryview(buffy)
+    #print(buffy[0])
+    #print(bview[0])
+    bview.release()
+    return buffy
 
-def export_data(filename, buffy):
+def export_wav(filename, buffy):
     header = import_header(filename)
     f = open(filename, 'rb+')
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
     f.seek(44)
+    mview = memoryview(buffy)
+    f.write(mview.tobytes())
+    mview.release()
+    f.close()
+
+def export_data(filename, buffy):
+    f = open(filename, 'wb')
     mview = memoryview(buffy)
     f.write(mview.tobytes())
     mview.release()
