@@ -31,19 +31,6 @@ const std::map<goopax::type_enum_t, std::map<std::string, std::string>> register
 };
 
 /* Util */
-unsigned long long lcm(unsigned long a, unsigned long b) {
-    unsigned long& larger = a;
-    unsigned long& smaller = b;
-    if (a<b){
-        larger = b;
-        smaller = a;
-    }
-    unsigned int n = 1;
-    while (n*smaller%larger!=0) {
-        ++n;
-    }
-    return n*smaller;
-}
 std::array<Py_ssize_t, PyBUF_MAX_NDIM> safe_copy(Py_ssize_t* first, Py_ssize_t len) {
     std::array<Py_ssize_t, PyBUF_MAX_NDIM> copy{};
     std::fill(std::begin(copy), std::end(copy), 0);
@@ -119,9 +106,9 @@ public:
     return shape;
     };
     static const Py_ssize_t Min_len(goopax_device& d, const Py_ssize_t denominator) {
-        Py_ssize_t min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(simd_function::queue_variables+simd_function::user_variables),denominator);//Intel CPU
+        Py_ssize_t min_len = std::lcm(d.default_num_groups_min()*d.default_local_size()*(simd_function::queue_variables+simd_function::user_variables),denominator);//Intel CPU
         if (d.max_registers()>=simd_function::queue_variables+simd_function::user_variables) {
-            min_len = lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-simd_function::queue_variables-simd_function::user_variables),denominator);
+            min_len = std::lcm(d.default_num_groups_min()*d.default_local_size()*(d.max_registers()-simd_function::queue_variables-simd_function::user_variables),denominator);
         }
         return min_len;
     }

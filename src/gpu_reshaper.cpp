@@ -1,9 +1,4 @@
 #include <stdio.h>
-//#include <algorithm>
-//#include <array>
-//#include <string>
-//#include <iostream>
-//#include <map>
 #include <goopax_extra/types.hpp>
 
 //#define PY_SSIZE_T_CLEAN
