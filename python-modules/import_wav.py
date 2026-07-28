@@ -25,13 +25,6 @@ def import_header(filename):
     f.close()
     return result
 
-def pcm_integer(filename):
-    header = import_header(filename)
-    if (header["audio_fmt"][0] != 1):
-        raise Exception("Not PCM Integer")
-    from struct import calcsize
-    return ('h',int(header["data_size"][0]/calcsize('h')))
-
 def import_wav(filename, selection):
     header = import_header(filename)
     f = open(filename, 'r')
@@ -81,3 +74,10 @@ def export_data(filename, buffy):
     f.write(mview.tobytes())
     mview.release()
     f.close()
+
+def pcm_integer(filename):
+    header = import_header(filename)
+    if (header["audio_fmt"][0] != 1):
+        raise Exception("Not PCM Integer")
+    from struct import calcsize
+    return ('h',int(header["data_size"][0]/calcsize('h')))

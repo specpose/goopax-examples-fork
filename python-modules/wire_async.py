@@ -1,3 +1,4 @@
+#!/bin/python
 """PyAudio Example: Audio wire between input and output. Callback version."""
 
 import time

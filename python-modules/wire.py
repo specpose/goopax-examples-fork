@@ -1,3 +1,4 @@
+#!/bin/python
 """PyAudio Example: full-duplex wire between input and output."""
 
 import sys

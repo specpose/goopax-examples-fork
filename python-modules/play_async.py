@@ -1,3 +1,4 @@
+#!/bin/python
 """PyAudio Example: Play a wave file (callback version)."""
 
 import wave

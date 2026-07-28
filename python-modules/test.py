@@ -11,7 +11,7 @@ def test_generator_simd(filename):
     print("Using:")
     print(selection)
 
-    from test_util import shape_to_len
+    from waterfall import shape_to_len
     from struct import calcsize
     print("Generating minimal Input buffer size "+str(shape_to_len(selection[2]['shape'])*calcsize(selection[2]['format']))+" bytes...")
     from import_wav import generate_data_aligned
@@ -55,9 +55,3 @@ def test_wav_simd(filename):
     print("Exporting data to file "+filename+".")
     from import_wav import export_wav
     export_wav(filename,custom_buffer)
-
-if __name__ == "__main__":
-    import sys
-    from sys import path
-    path.append('../python-modules')
-    test_wav_simd('./output.wav')
