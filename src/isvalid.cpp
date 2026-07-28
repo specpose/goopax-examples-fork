@@ -52,7 +52,6 @@ typedef short T;
 #include "waterfall.hpp"
 #include "simd_function.hpp"
 #include "mykernels.hpp"
-#include <map>
 
 int main()
 {

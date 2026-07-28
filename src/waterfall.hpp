@@ -61,12 +61,9 @@ static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t
 struct base_function {
     static const Py_ssize_t queue_variables;
     static const Py_ssize_t user_variables;
-
 };
 
 /*  Interface: Types    */
-//template<typename FunctionClass> PyObject* host_query(PyObject* empty, PyObject* args);
-//template<typename FunctionClass> Py_ssize_t min_len(goopax_device& d, Py_ssize_t denominator);
 template<typename FunctionClass> struct BaseFunction{
     PyObject_VAR_HEAD
     goopax_device device;
@@ -115,7 +112,6 @@ template<typename FunctionClass> int BaseFunction_init(PyObject* self, PyObject*
     _self->func = nullptr;
     return -1;
 };
-//#include <goopax_extra/output.hpp>
 template<typename FunctionClass> PyObject* BaseFunction_call(PyObject *self, PyObject *args, PyObject *kwargs) {
     //printf("Call\n");
     BaseFunction<FunctionClass>* _self = (BaseFunction<FunctionClass>*) self;
@@ -124,8 +120,6 @@ template<typename FunctionClass> PyObject* BaseFunction_call(PyObject *self, PyO
     if (PyArg_ParseTuple(args, "O", &mvobject)) {
         if (PyMemoryView_Check(mvobject)!=1)
             abort();
-        //Py_buffer* view = PyMemoryView_GET_BUFFER(mvobject);
-        //PyObject* obj = PyMemoryView_GET_BASE(mvobject);
         Py_buffer* view = new Py_buffer;
         if (PyObject_GetBuffer(mvobject, view, PyBUF_C_CONTIGUOUS | PyBUF_FORMAT | PyBUF_WRITABLE)==0){
             printf("Processing memoryview with: view.len %d, view.itemsize %d.\n", view->len, view->itemsize);
@@ -145,14 +139,13 @@ template<typename FunctionClass> PyObject* BaseFunction_call(PyObject *self, PyO
             _self->device.wait_all();
             //for(std::size_t i=0; i<shape[0]*shape[1]*shape[2]*shape[3]; ++i)
             //    //printf("%d,",((T*)view->buf)[i]);
-            //std::cout<< buffy << std::endl;
             PyBuffer_Release(view);
         }
     }
     Py_INCREF(Py_None);
     return Py_None;
 };
-/* Optional: Types */
+/* Additional: Types */
 template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* empty, PyObject* args, PyObject* kwargs) {
     PY_CXX_CONST char *const kwlist[] = {"format", "length", "denominator", NULL};
     PyObject* Devices = PyList_New(0);
@@ -178,9 +171,7 @@ template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* emp
                                 const std::array< uint8_t, 16 > device_id = dvec[device_i].uuid();
                                 PyTuple_SetItem(Device, 1, PyBytes_FromStringAndSize(reinterpret_cast<const char*>(&device_id), std::size(device_id)));
                                 auto gpu_shape = FunctionClass::Check_shape(dvec[device_i], l);
-                                //std::cout << gpu_shape << std::endl;
                                 auto gpu_strides = make_strides(gpu_shape, itemsize(format));
-                                //std::cout << gpu_strides << std::endl;
                                 PyObject* descr = memoryview_descriptor(std::string(format), gpu_shape, dvec[device_i].min_host_ptr_alignment(), FunctionClass::Min_len(dvec[device_i], denominator));
                                 PyTuple_SetItem(Device, 2, descr);
                                 Py_INCREF(Device);

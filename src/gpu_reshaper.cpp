@@ -33,7 +33,7 @@ static struct PyModuleDef gpu_reshaper_module = {
     "gpu_reshaper",
     "",
     0,
-    0, // methods
+    0, // module methods
     NULL,
     NULL,
     NULL,
