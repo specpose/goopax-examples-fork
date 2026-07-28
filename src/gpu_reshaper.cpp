@@ -7,6 +7,7 @@
 
 typedef short T;
 #include "waterfall.hpp"
+#include "simd_function.hpp"
 
 #if DEBUG
 #define Py_DECREF_bak Py_DECREF

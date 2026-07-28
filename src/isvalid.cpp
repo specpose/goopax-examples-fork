@@ -50,6 +50,7 @@ static Py_ssize_t user_variables = 1;
 typedef short T;
 #include "gpu_buffer.hpp"
 #include "waterfall.hpp"
+#include "simd_function.hpp"
 #include "mykernels.hpp"
 #include <map>
 
