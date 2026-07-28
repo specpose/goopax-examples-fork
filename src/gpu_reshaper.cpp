@@ -92,13 +92,7 @@ int main(int argc, char *argv[]){
     PyObject_CallObject(prog,prog_args);
 
     PyGILState_Release(gstate);
-#if DEBUG
-    if (Py_FinalizeEx() < 0)
-        abort();
-#else
-    Py_Finalize();
-#endif
-    return 0;
+    return Py_FinalizeEx();
 }
 #endif
 
