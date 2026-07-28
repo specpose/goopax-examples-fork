@@ -28,12 +28,10 @@ def test_generator_simd(filename):
     export_data(filename,custom_buffer)
 
 def test_wav_simd(filename):
-    import import_wav
-    from import_wav import wav_format
-    wav_format = wav_format(filename)
+    from import_wav import pcm_integer
+    wav_format = pcm_integer(filename)
     print(wav_format)
 
-    import gpu_reshaper
     from gpu_reshaper import silence
     descriptor = silence.host_query(wav_format[0], length=wav_format[1])
 
@@ -62,4 +60,4 @@ if __name__ == "__main__":
     import sys
     from sys import path
     path.append('../python-modules')
-    test_wav_simd('../output.wav')
+    test_wav_simd('./output.wav')

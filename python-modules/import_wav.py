@@ -25,38 +25,34 @@ def import_header(filename):
     f.close()
     return result
 
-def wav_format(filename):
+def pcm_integer(filename):
     header = import_header(filename)
-    f = open(filename, 'r')
     if (header["audio_fmt"][0] != 1):
         raise Exception("Not PCM Integer")
-    f.close()
-    import struct
     from struct import calcsize
     return ('h',int(header["data_size"][0]/calcsize('h')))
 
-def import_wav(filename, wav_format):
+def import_wav(filename, selection):
     header = import_header(filename)
     f = open(filename, 'r')
-    if (header["audio_fmt"][0] == 1 and wav_format[0] != 'h'):
+    if (selection[2]['format'] != 'h'):
         raise Exception("Only short int is accepted")
     dt = numpy.dtype('i'+str(int(header["bits_per_sample"][0]/8)))
-    result = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
+    arr = numpy.fromfile(f, dtype=dt, count=header["data_size"][0], sep='', offset=44)
     f.close()
-    return result
+    return arr
 
 def import_wav_aligned(filename, selection):
     header = import_header(filename)
     f = open(filename, 'rb')
-    if (header["audio_fmt"][0] == 1 and selection[2]['format'] != 'h'):
+    if (selection[2]['format'] != 'h'):
         raise Exception("Only short int is accepted")
-    import gpu_buffer
     from gpu_buffer import CustomBuffer
     buffy = CustomBuffer(selection[2]['format'], selection[2]['shape'], selection[2]['alignment'])
     bview = memoryview(buffy)
     f.read(44)
     if not (f.readinto(bview) == header["data_size"][0]):
-        raise Exception("Could not read file into numpy array")
+        raise Exception("Could not read file into buffy")
     bview.release()
     f.close()
     return buffy
@@ -65,8 +61,6 @@ def generate_data_aligned(selection):
     from gpu_buffer import CustomBuffer
     buffy = CustomBuffer(selection[2]['format'], selection[2]['shape'], selection[2]['alignment'])
     bview = memoryview(buffy)
-    #print(buffy[0])
-    #print(bview[0])
     bview.release()
     return buffy
 
@@ -87,7 +81,3 @@ def export_data(filename, buffy):
     f.write(mview.tobytes())
     mview.release()
     f.close()
-
-import sys
-if __name__ == "__main__":
-    pass

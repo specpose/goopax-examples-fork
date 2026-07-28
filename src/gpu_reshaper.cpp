@@ -56,8 +56,23 @@ PyMODINIT_FUNC PyInit_gpu_reshaper(void){
 }
 
 #if !MODULE_LIBRARY
-int main(){
-    const char* arg1 = "./gpu_reshaper.out";
+int main(int argc, char *argv[]){
+    bool args[] = {true, false};
+    std::string p;
+    std::string arg1;
+    if (argc < 2) {
+        args[1] = true;
+        p = "test_generator_simd";
+        arg1 = std::string(argv[0])+".out";
+    } else if (argc == 2) {
+        args[1] = true;
+        p = "test_wav_simd";
+        arg1 = std::string(argv[1]);
+        std::cout << "filename: " << arg1 << std::endl;
+    } else {
+        std::cerr << "usage: " << argv[0] << " fileName" << std::endl;
+        exit(1);
+    }
 
     PyImport_AppendInittab("gpu_buffer", PyInit_gpu_buffer);
     PyImport_AppendInittab("gpu_reshaper", PyInit_gpu_reshaper);
@@ -75,11 +90,11 @@ int main(){
 
     PyObject* test_m = PyImport_ImportModule("test");
 
-    PyObject* test_generator_simd = PyObject_GetAttrString(test_m,"test_generator_simd");
-    PyObject* test_generator_simd_args = PyTuple_New(1);
-    PyObject* filename = PyUnicode_FromString(arg1);
-    PyTuple_SetItem(test_generator_simd_args, 0, filename);
-    PyObject_CallObject(test_generator_simd,test_generator_simd_args);
+    PyObject* prog = PyObject_GetAttrString(test_m,p.c_str());
+    PyObject* prog_args = PyTuple_New(1);
+    PyObject* filename = PyUnicode_FromString(arg1.c_str());
+    PyTuple_SetItem(prog_args, 0, filename);
+    PyObject_CallObject(prog,prog_args);
 
     PyGILState_Release(gstate);
 #if DEBUG
