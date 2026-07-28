@@ -68,7 +68,6 @@ int main(int argc, char *argv[]){
         args[1] = true;
         p = "test_wav_simd";
         arg1 = std::string(argv[1]);
-        std::cout << "filename: " << arg1 << std::endl;
     } else {
         std::cerr << "usage: " << argv[0] << " fileName" << std::endl;
         exit(1);

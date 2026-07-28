@@ -220,7 +220,6 @@ template<typename FunctionClass> PyObject* BaseFunction_call(PyObject *self, PyO
 };
 /* Optional: Types */
 template<typename FunctionClass> PyObject* BaseFunction_host_query(PyObject* empty, PyObject* args, PyObject* kwargs) {
-    printf("Host Query\n");
     PY_CXX_CONST char *const kwlist[] = {"format", "length", "denominator", NULL};
     PyObject* Devices = PyList_New(0);
     const char* format = NULL;

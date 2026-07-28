@@ -6,36 +6,53 @@
 #include <goopax>
 #include <goopax_extra/output.hpp>
 #include <goopax_extra/types.hpp>
+#include <iomanip>
+
+using namespace goopax;
+using namespace std;
+
+namespace std
+{
+    template<typename T, size_t N>
+    std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
+    {
+        s << "(";
+        for (size_t k = 0; k < N; ++k)
+        {
+            if (k != 0)
+            {
+                s << ", ";
+            }
+            s << a[k];
+        }
+        s << ")";
+        return s;
+    }
+
+    std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
+    {
+        if (ti != nullptr)
+        {
+            s << goopax::pretty_typename(*ti);
+        }
+        else
+        {
+            s << "unknown type";
+        }
+        return s;
+    }
+}
+
 #include <Python.h>
 static Py_ssize_t queue_variables = 3;
 static Py_ssize_t user_variables = 1;
-#include "gpu_reshaper.hpp"
 
 typedef short T;
-using namespace goopax;
+#include "gpu_buffer.hpp"
 #include "waterfall.hpp"
 #include "mykernels.hpp"
-
-using namespace std;
-
 #include <map>
-namespace std
-{
-std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
-{
-    if (ti != nullptr)
-    {
-        s << goopax::pretty_typename(*ti);
-    }
-    else
-    {
-        s << "unknown type";
-    }
-    return s;
-}
-}
 
-#include <iomanip>
 int main()
 {
     Py_InitializeEx(0);
