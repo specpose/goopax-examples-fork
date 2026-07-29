@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
     PyObject* path = PyObject_GetAttrString(sys_m, "path");
     PyObject* append = PyObject_GetAttrString(path, "append");
     PyObject* append_args = PyTuple_New(1);
-    PyObject* directory = PyUnicode_FromString("../python-modules");
+    PyObject* directory = PyUnicode_FromString("../../src/python/python-modules");
     PyTuple_SetItem(append_args, 0, directory);
     PyObject_CallObject(append, append_args);
 
