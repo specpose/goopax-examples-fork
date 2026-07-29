@@ -1,4 +1,4 @@
-class simd_function : public base_function, public std::function<void(goopax::resource<T>&,goopax::gpu_uint)> {
+class simd_function : public base_function {
 public:
     static const Py_ssize_t queue_variables = 3;
     static const Py_ssize_t user_variables = 1;
@@ -47,7 +47,7 @@ public:
         }
         return min_len;
     }
-    simd_function(goopax::goopax_device& d) : std::function<void(goopax::resource<T>&,goopax::gpu_uint)>{}, _shape3(d.max_registers() - queue_variables - user_variables) {}
+    simd_function(goopax::goopax_device& d) : base_function(), _shape3(d.max_registers() - queue_variables - user_variables) {}
 protected:
     unsigned int _shape3;
 };

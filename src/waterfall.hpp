@@ -58,9 +58,11 @@ static PyObject* memoryview_descriptor(std::string format, std::array<Py_ssize_t
 }
 
 /* Interface */
-struct base_function {
+struct base_function : std::function<void(goopax::resource<T>&,goopax::gpu_uint)> {
     static const Py_ssize_t queue_variables;
     static const Py_ssize_t user_variables;
+    base_function() : std::function<void(goopax::resource<T>&,goopax::gpu_uint)>{} {};
+    virtual void operator()(goopax::resource<T>& buffy, goopax::gpu_uint shape2) = 0;
 };
 
 /*  Interface: Types    */
