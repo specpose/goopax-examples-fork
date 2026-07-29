@@ -9,7 +9,7 @@ typedef short T;
 #include "waterfall.hpp"
 #include "simd_function.hpp"
 
-#if DEBUG
+#ifndef NDEBUG
 #define Py_DECREF_bak Py_DECREF
 void __delete(PyObject* X){
     //int* refcnt = (int*)(X);
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]){
 }
 #endif
 
-#if DEBUG
+#ifndef NDEBUG
 #undef Py_DECREF
 #define Py_DECREF Py_DECREF_bak;
 #endif
