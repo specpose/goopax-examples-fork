@@ -13,34 +13,34 @@ using namespace std;
 
 namespace std
 {
-    template<typename T, size_t N>
-    std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
+template<typename T, size_t N>
+std::ostream& operator<<(std::ostream& s, const std::array<T, N>& a)
+{
+    s << "(";
+    for (size_t k = 0; k < N; ++k)
     {
-        s << "(";
-        for (size_t k = 0; k < N; ++k)
+        if (k != 0)
         {
-            if (k != 0)
-            {
-                s << ", ";
-            }
-            s << a[k];
+            s << ", ";
         }
-        s << ")";
-        return s;
+        s << a[k];
     }
+    s << ")";
+    return s;
+}
 
-    std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
+std::ostream& operator<<(std::ostream& s, const std::type_info* ti)
+{
+    if (ti != nullptr)
     {
-        if (ti != nullptr)
-        {
-            s << goopax::pretty_typename(*ti);
-        }
-        else
-        {
-            s << "unknown type";
-        }
-        return s;
+        s << goopax::pretty_typename(*ti);
     }
+    else
+    {
+        s << "unknown type";
+    }
+    return s;
+}
 }
 
 #include <Python.h>
@@ -57,8 +57,8 @@ int main()
 {
     Py_InitializeEx(0);
 
-    unsigned int numerator = 48000;// sample rate
-    unsigned int denominator = 128;// chunk size
+    unsigned int numerator = 48000; // sample rate
+    unsigned int denominator = 128; // chunk size
     cout << "Assuming denominator " << denominator << endl;
     for (unsigned int log_env = 0; log_env < 10; ++log_env)
     {
@@ -91,12 +91,14 @@ int main()
 
                 auto registered_type = register_types(d);
 
-                for (const auto& t : registered_type) {
+                for (const auto& t : registered_type)
+                {
                     cout << "\"" << type_to_python_name(t.first) << "\":\n";
-                    for (const auto& s : t.second) {
+                    for (const auto& s : t.second)
+                    {
                         const auto is = itemsize(s.first);
                         auto ml = silence::Min_len(d, denominator);
-                        cout << "Assuming minimal aligned buffer size " << ml*is << " bytes" << endl;
+                        cout << "Assuming minimal aligned buffer size " << ml * is << " bytes" << endl;
                         auto shape = silence::Check_shape(d, ml);
                         cout << shape << endl;
                         auto strides = make_strides(shape, is);
@@ -104,7 +106,6 @@ int main()
                     }
                     cout << endl;
                 }
-
             }
         }
     }
@@ -114,5 +115,4 @@ int main()
 #else
     Py_Finalize();
 #endif
-
 }
